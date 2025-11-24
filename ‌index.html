@@ -92,13 +92,17 @@
       margin: 0;
     }
 
-    /* Cada bus es una tarjeta con info + mapa */
+    /* Cada bus es una tarjeta */
     .bus-item {
       background: #f9f9f9;
       margin-bottom: 0.4rem;
       border-radius: 0.4rem;
       font-size: 0.9rem;
       overflow: hidden;
+      padding: 0.5rem 0.75rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
     .bus-item.soon {
       background: #e6f7e6;  /* verde clarito */
@@ -107,16 +111,6 @@
       background: #fde6e6;  /* rojo clarito */
     }
 
-    .bus-header {
-      width: 100%;
-      border: none;
-      background: transparent;
-      padding: 0.5rem 0.75rem 0.3rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      cursor: default;
-    }
     .bus-header-left {
       display: flex;
       flex-direction: column;
@@ -133,9 +127,7 @@
     .bus-header-right {
       font-weight: 600;
     }
-    .bus-header::after {
-      content: "";
-    }
+
     .empty {
       font-size: 0.9rem;
       color: #666;
@@ -144,235 +136,236 @@
   </style>
 </head>
 <body>
-  <h1>Próximos buses EMT</h1>
-  <div class="legend">
-    <div class="legend-item">
-      <div class="legend-color" style="background:#fde6e6;"></div>
-      <span>&lt; 15 min (justo)</span>
-    </div>
-    <div class="legend-item">
-      <div class="legend-color" style="background:#e6f7e6;"></div>
-      <span>20–15 min (bien)</span>
+<h1>Próximos buses EMT</h1>
+<div class="legend">
+  <div class="legend-item">
+    <div class="legend-color" style="background:#fde6e6;"></div>
+    <span>&lt; 15 min (justo)</span>
+  </div>
+  <div class="legend-item">
+    <div class="legend-color" style="background:#e6f7e6;"></div>
+    <span>20–15 min (bien)</span>
+  </div>
+</div>
+
+<div class="accordion">
+  <!-- Parada 3224 -->
+  <div class="accordion-item open">
+    <button class="accordion-header">
+      Herrera Oria - Labastida (TRABAJO) - Parada 3224
+      <span>todas las líneas</span>
+    </button>
+    <div class="accordion-panel">
+      <div class="status" id="status-3224">Cargando...</div>
+      <ul class="bus-list" id="buses-3224"></ul>
     </div>
   </div>
 
-  <div class="accordion">
-    <!-- Parada 3224 -->
-    <div class="accordion-item open">
-      <button class="accordion-header">
-        Herrera Oria - Labastida (TRABAJO) - Parada 3224
-        <span>todas las líneas</span>
-      </button>
-      <div class="accordion-panel">
-        <div class="status" id="status-3224">Cargando...</div>
-        <ul class="bus-list" id="buses-3224"></ul>
-      </div>
-    </div>
-
-    <!-- Parada 2676 (solo 66 y 137) -->
-    <div class="accordion-item">
-      <button class="accordion-header">
-        Fuente de la Carra hacia el centro - Parada 2676
-        <span>líneas 66 y 137</span>
-      </button>
-      <div class="accordion-panel">
-        <div class="status" id="status-2676">Cargando...</div>
-        <ul class="bus-list" id="buses-2676"></ul>
-      </div>
+  <!-- Parada 2676 (solo 66 y 137) -->
+  <div class="accordion-item">
+    <button class="accordion-header">
+      Fuente de la Carra hacia el centro - Parada 2676
+      <span>líneas 66 y 137</span>
+    </button>
+    <div class="accordion-panel">
+      <div class="status" id="status-2676">Cargando...</div>
+      <ul class="bus-list" id="buses-2676"></ul>
     </div>
   </div>
+</div>
 
-  <script>
-    const USER = "diegojesus.escudero@gmail.com";
-    const PASS = "Linares251291?";
+<script>
+  const USER = "diegojesus.escudero@gmail.com";
+  const PASS = "Linares251291?";
 
-    const BASE_URL = "https://openapi.emtmadrid.es/v2";
+  const BASE_URL = "https://openapi.emtmadrid.es/v2";
 
-    // Config de paradas
-    const STOPS = [
-      { id: 3224, label: "Herrera Oria - Labastida (TRABAJO) - Parada 3224" },
-      { id: 2676, label: "Fuente de la Carra hacia el centro - Parada 2676", filterLines: ["66", "137"] }
-    ];
+  // Config de paradas
+  const STOPS = [
+    { id: 3224, label: "Herrera Oria - Labastida (TRABAJO) - Parada 3224" },
+    { id: 2676, label: "Fuente de la Carra hacia el centro - Parada 2676", filterLines: ["66", "137"] }
+  ];
 
-    let accessToken = null;
+  let accessToken = null;
 
-    // Login a EMT (aceptamos code "00" y "01")
-    async function login() {
-      const res = await fetch(`${BASE_URL}/mobilitylabs/user/login/`, {
-        method: "GET",
-        headers: {
-          "email": USER,
-          "password": PASS
-        }
-      });
-
-      if (!res.ok) {
-        throw new Error("Error HTTP en login: " + res.status);
+  // Login a EMT (aceptamos code "00" y "01")
+  async function login() {
+    const res = await fetch(`${BASE_URL}/mobilitylabs/user/login/`, {
+      method: "GET",
+      headers: {
+        "email": USER,
+        "password": PASS
       }
+    });
 
-      const json = await res.json();
-      console.log("LOGIN JSON", json);
-
-      if (json.code !== "00" && json.code !== "01") {
-        throw new Error("Login EMT falló: " + (json.description || json.code));
-      }
-
-      accessToken = json.data[0].accessToken;
-      console.log("ACCESS TOKEN", accessToken);
-      return accessToken;
+    if (!res.ok) {
+      throw new Error("Error HTTP en login: " + res.status);
     }
 
-    // Obtener llegadas para una parada
-    async function getArrivals(stopId) {
-      if (!accessToken) {
-        await login();
-      }
+    const json = await res.json();
+    console.log("LOGIN JSON", json);
 
-      const res = await fetch(
-        `${BASE_URL}/transport/busemtmad/stops/${stopId}/arrives/`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "accessToken": accessToken
-          },
-          body: JSON.stringify({
-            stopId: stopId,
-            Text_EstimationsRequired_YN: "Y",
-            Urban_UseYN: "Y"
-          })
-        }
-      );
-
-      if (!res.ok) {
-        throw new Error("Error HTTP en arrives (" + stopId + "): " + res.status);
-      }
-
-      const json = await res.json();
-      console.log("ARRIVES JSON stop", stopId, json);
-
-      if (json.code !== "00") {
-        // si el token caducó o similar, reintentamos una vez
-        if (json.code === "01" || json.code === "02") {
-          accessToken = null;
-          return getArrivals(stopId);
-        }
-        throw new Error("Error API arrives (" + stopId + "): " + (json.description || json.code));
-      }
-
-      const data = json.data && json.data[0] && json.data[0].Arrive
-        ? json.data[0].Arrive
-        : [];
-
-      return data;
+    if (json.code !== "00" && json.code !== "01") {
+      throw new Error("Login EMT falló: " + (json.description || json.code));
     }
 
-    function renderStop(stopConfig, arrivals) {
-      const { id, filterLines } = stopConfig;
-      const listEl = document.getElementById(`buses-${id}`);
-      listEl.innerHTML = "";
+    accessToken = json.data[0].accessToken;
+    console.log("ACCESS TOKEN", accessToken);
+    return accessToken;
+  }
 
-      let filtered = arrivals;
+  // Obtener llegadas para una parada
+  async function getArrivals(stopId) {
+    if (!accessToken) {
+      await login();
+    }
 
-      if (filterLines && filterLines.length) {
-        filtered = arrivals.filter(a =>
-          filterLines.includes(String(a.line).trim())
-        );
-      }
-
-      if (!filtered.length) {
-        const li = document.createElement("li");
-        li.className = "empty";
-        li.textContent = "No hay buses previstos ahora mismo.";
-        listEl.appendChild(li);
-        return;
-      }
-
-      filtered
-        .sort((a, b) => (a.estimateArrive || 0) - (b.estimateArrive || 0))
-        .forEach(arr => {
-          const li = document.createElement("li");
-
-          const minutes = arr.estimateArrive != null
-            ? Math.round(arr.estimateArrive / 60)
-            : null;
-
-          // Clase base
-          let className = "bus-item";
-
-          // Colores según el tiempo que queda (según tu leyenda)
-          if (minutes != null) {
-            if (minutes < 15) {
-              className += " urgent";
-            } else if (minutes < 20) {
-              className += " soon";
+    const res = await fetch(
+            `${BASE_URL}/transport/busemtmad/stops/${stopId}/arrives/`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "accessToken": accessToken
+              },
+              body: JSON.stringify({
+                stopId: stopId,
+                Text_EstimationsRequired_YN: "Y",
+                Urban_UseYN: "Y"
+              })
             }
-          }
+    );
 
-          li.className = className;
+    if (!res.ok) {
+      throw new Error("Error HTTP en arrives (" + stopId + "): " + res.status);
+    }
 
-          // Cabecera del bus (sin acordeón)
-          const header = document.createElement("div");
-          header.className = "bus-header";
+    const json = await res.json();
+    console.log("ARRIVES JSON stop", stopId, json);
 
-          const left = document.createElement("div");
-          left.className = "bus-header-left";
-          left.innerHTML = `
+    if (json.code !== "00") {
+      // si el token caducó o similar, reintentamos una vez
+      if (json.code === "01" || json.code === "02") {
+        accessToken = null;
+        return getArrivals(stopId);
+      }
+      throw new Error("Error API arrives (" + stopId + "): " + (json.description || json.code));
+    }
+
+    const data = json.data && json.data[0] && json.data[0].Arrive
+            ? json.data[0].Arrive
+            : [];
+
+    return data;
+  }
+
+  function renderStop(stopConfig, arrivals) {
+    const { id, filterLines } = stopConfig;
+    const listEl = document.getElementById(`buses-${id}`);
+    if (!listEl) return;
+
+    listEl.innerHTML = "";
+
+    let filtered = arrivals;
+
+    if (filterLines && filterLines.length) {
+      filtered = arrivals.filter(a =>
+              filterLines.includes(String(a.line).trim())
+      );
+    }
+
+    if (!filtered.length) {
+      const li = document.createElement("li");
+      li.className = "empty";
+      li.textContent = "No hay buses previstos ahora mismo.";
+      listEl.appendChild(li);
+      return;
+    }
+
+    filtered
+            .sort((a, b) => (a.estimateArrive || 0) - (b.estimateArrive || 0))
+            .forEach(arr => {
+              const li = document.createElement("li");
+
+              const minutes = arr.estimateArrive != null
+                      ? Math.round(arr.estimateArrive / 60)
+                      : null;
+
+              // Clase base
+              let className = "bus-item";
+
+              // Colores según el tiempo que queda (según tu leyenda)
+              if (minutes != null) {
+                if (minutes < 15) {
+                  className += " urgent";
+                } else if (minutes < 20) {
+                  className += " soon";
+                }
+              }
+
+              li.className = className;
+
+              const left = document.createElement("div");
+              left.className = "bus-header-left";
+              left.innerHTML = `
             <div class="bus-main">Línea ${arr.line} → ${arr.destination || ""}</div>
             <div class="bus-sub">
               Distancia aprox: ${arr.DistanceBus != null ? arr.DistanceBus + " m" : "-"}
             </div>
           `;
 
-          const right = document.createElement("div");
-          right.className = "bus-header-right";
-          right.textContent =
-            minutes === 0
-              ? "Llegando"
-              : (minutes != null ? `${minutes} min` : "? min");
+              const right = document.createElement("div");
+              right.className = "bus-header-right";
+              right.textContent =
+                      minutes === 0
+                              ? "Llegando"
+                              : (minutes != null ? `${minutes} min` : "? min");
 
-          header.appendChild(left);
-          header.appendChild(right);
+              li.appendChild(left);
+              li.appendChild(right);
+              listEl.appendChild(li);
+            });
+  }
 
-          li.appendChild(header);
-          listEl.appendChild(li);
-        });
-    }
+  async function refreshStop(stopConfig) {
+    const statusEl = document.getElementById(`status-${stopConfig.id}`);
+    if (statusEl) statusEl.textContent = "Actualizando...";
 
-    async function refreshStop(stopConfig) {
-      const statusEl = document.getElementById(`status-${stopConfig.id}`);
-      statusEl.textContent = "Actualizando...";
-
-      try {
-        const arrivals = await getArrivals(stopConfig.id);
-        renderStop(stopConfig, arrivals);
+    try {
+      const arrivals = await getArrivals(stopConfig.id);
+      renderStop(stopConfig, arrivals);
+      if (statusEl) {
         statusEl.textContent = "Última actualización: " + new Date().toLocaleTimeString();
-      } catch (err) {
-        console.error(err);
+      }
+    } catch (err) {
+      console.error(err);
+      if (statusEl) {
         statusEl.textContent = "Error: " + err.message;
       }
     }
+  }
 
-    function refreshAll() {
-      STOPS.forEach(stop => refreshStop(stop));
-    }
+  function refreshAll() {
+    STOPS.forEach(stop => refreshStop(stop));
+  }
 
-    // Acordeón principal (paradas)
-    function setupAccordion() {
-      const items = document.querySelectorAll(".accordion-item");
-      items.forEach(item => {
-        const header = item.querySelector(".accordion-header");
-        header.addEventListener("click", () => {
-          item.classList.toggle("open");
-        });
+  // Acordeón principal (paradas)
+  function setupAccordion() {
+    const items = document.querySelectorAll(".accordion-item");
+    items.forEach(item => {
+      const header = item.querySelector(".accordion-header");
+      if (!header) return;
+      header.addEventListener("click", () => {
+        item.classList.toggle("open");
       });
-    }
+    });
+  }
 
-    // Init
-    setupAccordion();
-    refreshAll();
-    // refresco cada 15s
-    setInterval(refreshAll, 15000);
-  </script>
+  // Init
+  setupAccordion();
+  refreshAll();
+  // refresco cada 15s
+  setInterval(refreshAll, 15000);
+</script>
 </body>
 </html>
