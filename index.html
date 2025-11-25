@@ -111,34 +111,48 @@
       gap: 4px;
     }
 
+    /* BOTÓN NUEVO: redondo con icono */
     .refresh-btn {
-      border-radius: var(--radius-pill);
-      border: 1px solid rgba(37,99,235,0.7);
-      background: linear-gradient(135deg, rgba(37,99,235,0.06), rgba(59,130,246,0.12));
-      color: #1d4ed8;
-      padding: 4px 12px;
-      font-size: 11px;
-      font-weight: 600;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: none;
+      background: #005bb7;
+      color: #ffffff;
+      padding: 0;
+      font-size: 16px;
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      justify-content: center;
       cursor: pointer;
       outline: none;
-      transition: all 0.16s ease-out;
+      box-shadow: 0 4px 10px rgba(15,23,42,0.35);
+      transition: transform 0.15s ease, background 0.2s ease, box-shadow 0.2s ease;
     }
 
     .refresh-btn span.icon {
-      font-size: 13px;
+      font-size: 18px;
+      line-height: 1;
     }
 
     .refresh-btn:hover {
-      background: linear-gradient(135deg, rgba(37,99,235,0.1), rgba(59,130,246,0.18));
-      box-shadow: 0 0 0 1px rgba(37,99,235,0.3);
+      background: #0a6cff;
+      box-shadow: 0 6px 14px rgba(15,23,42,0.4);
     }
 
     .refresh-btn:active {
-      transform: translateY(1px);
-      box-shadow: none;
+      transform: scale(0.9);
+      box-shadow: 0 2px 6px rgba(15,23,42,0.3);
+    }
+
+    /* Animación de giro mientras actualiza */
+    .refresh-spin {
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
     }
 
     .last-update-global {
@@ -231,6 +245,7 @@
       color: var(--muted);
     }
 
+    /* badge del número de parada: más grande y azul */
     .accordion-header span.badge {
       font-size: 14px;
       font-weight: 700;
@@ -464,9 +479,9 @@
       </div>
     </div>
     <div class="refresh-block">
+      <!-- Botón redondo solo con icono -->
       <button class="refresh-btn" id="refresh-now">
         <span class="icon">⟳</span>
-        <span>Actualizar ahora</span>
       </button>
       <div class="last-update-global" id="last-update-global">
         Última actualización: —
@@ -761,8 +776,14 @@
   setInterval(refreshAll, 15000);
 
   if (refreshBtn) {
-    refreshBtn.addEventListener("click", () => {
-      refreshAll();
+    refreshBtn.addEventListener("click", async () => {
+      // animación de giro mientras se actualiza
+      refreshBtn.classList.add("refresh-spin");
+      try {
+        await refreshAll();
+      } finally {
+        setTimeout(() => refreshBtn.classList.remove("refresh-spin"), 600);
+      }
     });
   }
 </script>
