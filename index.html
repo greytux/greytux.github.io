@@ -35,7 +35,6 @@
       align-items: flex-start;
       padding: 24px 12px;
 
-      /* Fondo azul oscuro con degradado + blur */
       background: radial-gradient(circle at 30% 20%, rgba(29,78,216,0.45), transparent 60%),
       radial-gradient(circle at 80% 80%, rgba(2,132,199,0.45), transparent 55%),
       #0b1220;
@@ -45,20 +44,17 @@
       color: var(--text);
     }
 
-    /* Caja central (se mantiene igual pero ahora queda sobre el fondo blur) */
     .app-shell {
       width: 100%;
       max-width: 720px;
-      background: rgba(255,255,255,0.92); /* semitransparente pero casi blanco */
+      background: rgba(255,255,255,0.92);
       border-radius: var(--radius-lg);
       box-shadow: 0 18px 40px rgba(15,23,42,0.32);
       border: 1px solid rgba(148,163,184,0.35);
       overflow: hidden;
-
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
     }
-
 
     /* Header superior */
     .app-header {
@@ -111,7 +107,7 @@
       gap: 4px;
     }
 
-    /* BOTÓN NUEVO: redondo con icono */
+    /* Botón redondo de refrescar */
     .refresh-btn {
       width: 36px;
       height: 36px;
@@ -145,7 +141,6 @@
       box-shadow: 0 2px 6px rgba(15,23,42,0.3);
     }
 
-    /* Animación de giro mientras actualiza */
     .refresh-spin {
       animation: spin 0.6s linear infinite;
     }
@@ -226,7 +221,7 @@
       cursor: pointer;
       display: flex;
       justify-content: space-between;
-      align-items: center; /* esto ya centra el badge verticalmente */
+      align-items: center;
     }
 
     .accordion-header-main {
@@ -245,7 +240,6 @@
       color: var(--muted);
     }
 
-    /* badge del número de parada: más grande y azul */
     .accordion-header span.badge {
       font-size: 14px;
       font-weight: 700;
@@ -301,6 +295,12 @@
       background: #f97373;
     }
 
+    .walk-time {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
     .bus-list {
       list-style: none;
       padding: 0;
@@ -339,7 +339,7 @@
       min-width: 0;
     }
 
-    /* PANEL LED para la línea */
+    /* Panel LED para la línea */
     .line-badge {
       position: relative;
       min-width: 70px;
@@ -361,12 +361,12 @@
     .line-text {
       display: inline-block;
       white-space: nowrap;
-      padding-left: 100%; /* para que entre desde la derecha */
+      padding-left: 100%;
       font-family: "Courier New", ui-monospace, monospace;
       font-size: 20px;
       font-weight: 800;
       letter-spacing: 4px;
-      color: #facc15; /* amarillo */
+      color: #facc15;
       text-shadow:
               0 0 3px rgba(251,191,36,0.9),
               0 0 6px rgba(251,146,60,0.9),
@@ -375,12 +375,8 @@
     }
 
     @keyframes led-scroll {
-      0% {
-        transform: translateX(0);
-      }
-      100% {
-        transform: translateX(-100%);
-      }
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-100%); }
     }
 
     .bus-text {
@@ -447,6 +443,85 @@
       padding: 4px 2px 6px;
     }
 
+    /* Formulario dinámico de paradas */
+    .dynamic-controls {
+      margin-top: 12px;
+      padding: 10px 12px 12px;
+      background: #f3f4f6;
+      border-radius: 12px;
+      border: 1px dashed #cbd5f5;
+    }
+
+    .dynamic-title {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #111827;
+    }
+
+    .dynamic-form {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: nowrap;
+    }
+
+    .dynamic-form label {
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .dynamic-input {
+      flex: 1;
+      min-width: 0;
+      padding: 6px 8px;
+      border-radius: 999px;
+      border: 1px solid #cbd5e1;
+      font-size: 13px;
+      outline: none;
+    }
+
+    .dynamic-input-short {
+      max-width: 80px;
+      text-align: center;
+    }
+
+    .dynamic-input:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 1px rgba(37,99,235,0.35);
+    }
+
+    .dynamic-button {
+      border-radius: 999px;
+      border: none;
+      background: #2563eb;
+      color: white;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .dynamic-button:hover {
+      background: #1d4ed8;
+    }
+
+    .dynamic-button:active {
+      transform: translateY(1px);
+    }
+
+    .dynamic-help {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    #dynamic-stops {
+      margin-top: 10px;
+    }
+
     @media (max-width: 480px) {
       body {
         padding: 12px 8px;
@@ -465,6 +540,13 @@
       .bus-main {
         font-size: 12px;
       }
+      .dynamic-form {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .dynamic-button {
+        align-self: flex-end;
+      }
     }
   </style>
 </head>
@@ -475,10 +557,10 @@
       <div class="title-icon">E</div>
       <div>
         <h1>Próximos buses EMT</h1>
+        <div class="subtitle">Paradas favoritas en tiempo real</div>
       </div>
     </div>
     <div class="refresh-block">
-      <!-- Botón redondo solo con icono -->
       <button class="refresh-btn" id="refresh-now">
         <span class="icon">⟳</span>
       </button>
@@ -500,8 +582,8 @@
   </section>
 
   <main class="accordion">
-    <!-- Parada 3224 -->
-    <article class="accordion-item open">
+    <!-- Parada fija 3224 -->
+    <article class="accordion-item open" data-stop-id="3224">
       <button class="accordion-header">
         <div class="accordion-header-main">
           <div class="stop-name">Herrera Oria – Labastida (trabajo)</div>
@@ -510,6 +592,7 @@
         <span class="badge">3224</span>
       </button>
       <div class="accordion-panel">
+        <div class="walk-time" id="walk-3224"></div>
         <div class="status" id="status-3224">
           <span class="status-dot"></span>
           <span>Cargando…</span>
@@ -518,8 +601,8 @@
       </div>
     </article>
 
-    <!-- Parada 2677 (solo 66 y 137) -->
-    <article class="accordion-item">
+    <!-- Parada fija 2677 -->
+    <article class="accordion-item" data-stop-id="2677">
       <button class="accordion-header">
         <div class="accordion-header-main">
           <div class="stop-name">Fuente de la Carra → centro</div>
@@ -528,6 +611,7 @@
         <span class="badge">2677</span>
       </button>
       <div class="accordion-panel">
+        <div class="walk-time" id="walk-2677"></div>
         <div class="status" id="status-2677">
           <span class="status-dot"></span>
           <span>Cargando…</span>
@@ -535,23 +619,148 @@
         <ul class="bus-list" id="buses-2677"></ul>
       </div>
     </article>
+
+    <!-- Formulario para añadir nuevas paradas -->
+    <section class="dynamic-controls">
+      <div class="dynamic-title">Añadir otra parada</div>
+      <form id="add-stop-form" class="dynamic-form">
+        <label for="stop-id-input">Parada</label>
+        <input
+                id="stop-id-input"
+                class="dynamic-input"
+                type="number"
+                inputmode="numeric"
+                placeholder="Ej: 1234"
+        />
+        <label for="walk-min-input">Min</label>
+        <input
+                id="walk-min-input"
+                class="dynamic-input dynamic-input-short"
+                type="number"
+                inputmode="numeric"
+                min="0"
+                placeholder="Ej: 7"
+        />
+        <button type="submit" class="dynamic-button">Añadir</button>
+      </form>
+      <div class="dynamic-help">
+        Se creará un nuevo acordeón igual que los demás, con llegadas en tiempo real y tu tiempo andando.
+      </div>
+      <div id="dynamic-stops"></div>
+    </section>
   </main>
 </div>
 
 <script>
   const USER = "diegojesus.escudero@gmail.com";
   const PASS = "Linares251291?";
-
   const BASE_URL = "https://openapi.emtmadrid.es/v2";
 
+  // Coordenadas aproximadas de las paradas (EJEMPLO: cambia por las reales)
+  // Formato: lat = 40.xxxxx, lon = -3.xxxxx
+  const STOP_COORDS = {
+    3224: { lat: 40.4800, lon: -3.7000 }, // TODO: sustituir por coords reales de 3224
+    2677: { lat: 40.5000, lon: -3.6900 }, // TODO: sustituir por coords reales de 2677
+  };
+
+  // Guardamos la posición del usuario cuando nos la dé el navegador
+  let userLocation = null;
+
+  // Velocidad media andando (km/h)
+  const WALK_SPEED_KMH = 5;
+
+  // Paradas fijas iniciales
   const STOPS = [
     { id: 3224, label: "Herrera Oria - Labastida (TRABAJO) - Parada 3224" },
     { id: 2677, label: "Fuente de la Carra hacia el centro - Parada 2677", filterLines: ["66", "137"] }
   ];
 
+  // Tiempo andando aproximado en minutos (fallback manual)
+  const WALK_TIMES = {
+    3224: 7,
+    2677: 6
+    // Las nuevas paradas se añadirán dinámicamente aquí si el usuario pone minutos
+  };
+
   let accessToken = null;
   const globalStatusEl = document.getElementById("last-update-global");
   const refreshBtn = document.getElementById("refresh-now");
+
+  const addStopForm = document.getElementById("add-stop-form");
+  const stopIdInput = document.getElementById("stop-id-input");
+  const walkMinInput = document.getElementById("walk-min-input");
+  const dynamicStopsContainer = document.getElementById("dynamic-stops");
+
+  // Pedir geolocalización al usuario
+  function initGeolocation() {
+    if (!("geolocation" in navigator)) {
+      console.warn("Geolocalización no disponible en este navegador.");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              userLocation = {
+                lat: pos.coords.latitude,
+                lon: pos.coords.longitude,
+              };
+              console.log("Ubicación del usuario:", userLocation);
+              // Al tener ubicación, refrescamos para recalcular tiempos andando
+              refreshAll();
+            },
+            (err) => {
+              console.warn("No se pudo obtener la ubicación:", err.message);
+            },
+            {
+              enableHighAccuracy: true,
+              timeout: 10000,
+              maximumAge: 30000,
+            }
+    );
+  }
+
+  // Distancia entre dos puntos (lat/lon) en metros (Haversine)
+  function getDistanceMeters(lat1, lon1, lat2, lon2) {
+    const R = 6371000; // radio tierra en metros
+    const toRad = (deg) => (deg * Math.PI) / 180;
+
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(toRad(lat1)) *
+            Math.cos(toRad(lat2)) *
+            Math.sin(dLon / 2) *
+            Math.sin(dLon / 2);
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  // Devuelve minutos andando para una parada:
+  // 1) Si hay geolocalización + coords -> cálculo real
+  // 2) Si no, usa WALK_TIMES[stopId] si existe
+  // 3) Si no, null
+  function getWalkingMinutes(stopId) {
+    if (userLocation && STOP_COORDS[stopId]) {
+      const stop = STOP_COORDS[stopId];
+      const dist = getDistanceMeters(
+              userLocation.lat,
+              userLocation.lon,
+              stop.lat,
+              stop.lon
+      );
+      const minutes = (dist / 1000 / WALK_SPEED_KMH) * 60;
+      return Math.round(minutes);
+    }
+
+    const manual = WALK_TIMES[stopId];
+    if (manual != null) {
+      return manual;
+    }
+
+    return null;
+  }
 
   async function login() {
     const res = await fetch(`${BASE_URL}/mobilitylabs/user/login/`, {
@@ -628,6 +837,18 @@
 
     const statusText = statusWrapper.querySelector("span:nth-child(2)");
 
+    // Tiempo andando (dinámico si se puede)
+    const walkEl = document.getElementById(`walk-${id}`);
+    if (walkEl) {
+      const walk = getWalkingMinutes(id);
+      if (walk != null) {
+        walkEl.textContent = `Tiempo andando aproximado hasta la parada: ${walk} min`;
+      } else {
+        walkEl.textContent =
+                "Tiempo andando aproximado: no configurado o sin ubicación.";
+      }
+    }
+
     listEl.innerHTML = "";
 
     let filtered = arrivals;
@@ -674,7 +895,6 @@
 
               const lineBadge = document.createElement("div");
               lineBadge.className = "line-badge";
-              // texto dentro con efecto desplazamiento LED
               lineBadge.innerHTML = `<span class="line-text">${arr.line}</span>`;
 
               const textBlock = document.createElement("div");
@@ -770,13 +990,96 @@
     });
   }
 
+  // Crear dinámicamente un acordeón nuevo para una parada
+  function createDynamicStopAccordion(stopId, walkMinutes) {
+    // Si ya existe en STOPS, solo la abrimos y actualizamos tiempo andando manual si viene
+    if (STOPS.some(s => s.id === stopId)) {
+      if (walkMinutes != null) {
+        WALK_TIMES[stopId] = walkMinutes;
+      }
+      const existing = document.querySelector(`.accordion-item[data-stop-id="${stopId}"]`);
+      if (existing) {
+        existing.classList.add("open");
+      }
+      refreshStop({ id: stopId });
+      return;
+    }
+
+    // Guardar el tiempo andando manual si se ha indicado
+    if (walkMinutes != null) {
+      WALK_TIMES[stopId] = walkMinutes;
+    }
+
+    const stopConfig = { id: stopId, label: `Parada ${stopId}` };
+    STOPS.push(stopConfig);
+
+    const article = document.createElement("article");
+    article.className = "accordion-item open";
+    article.dataset.stopId = String(stopId);
+    article.innerHTML = `
+        <button class="accordion-header">
+          <div class="accordion-header-main">
+            <div class="stop-name">Parada ${stopId}</div>
+            <div class="stop-subtitle">Número de parada ${stopId}</div>
+          </div>
+          <span class="badge">${stopId}</span>
+        </button>
+        <div class="accordion-panel">
+          <div class="walk-time" id="walk-${stopId}"></div>
+          <div class="status" id="status-${stopId}">
+            <span class="status-dot"></span>
+            <span>Cargando…</span>
+          </div>
+          <ul class="bus-list" id="buses-${stopId}"></ul>
+        </div>
+      `;
+
+    dynamicStopsContainer.appendChild(article);
+
+    const header = article.querySelector(".accordion-header");
+    header.addEventListener("click", () => {
+      article.classList.toggle("open");
+    });
+
+    refreshStop(stopConfig);
+  }
+
+  // Formulario: añadir parada nueva
+  if (addStopForm && stopIdInput) {
+    addStopForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const raw = stopIdInput.value.trim();
+      const walkRaw = walkMinInput.value.trim();
+
+      if (!raw) return;
+      const stopId = parseInt(raw, 10);
+      if (Number.isNaN(stopId) || stopId <= 0) {
+        alert("Introduce un número de parada válido.");
+        return;
+      }
+
+      let walkMinutes = null;
+      if (walkRaw) {
+        const w = parseInt(walkRaw, 10);
+        if (!Number.isNaN(w) && w >= 0) {
+          walkMinutes = w;
+        }
+      }
+
+      createDynamicStopAccordion(stopId, walkMinutes);
+      stopIdInput.value = "";
+      walkMinInput.value = "";
+    });
+  }
+
+  // Init
   setupAccordion();
+  initGeolocation(); // Pedimos ubicación al cargar
   refreshAll();
   setInterval(refreshAll, 15000);
 
   if (refreshBtn) {
     refreshBtn.addEventListener("click", async () => {
-      // animación de giro mientras se actualiza
       refreshBtn.classList.add("refresh-spin");
       try {
         await refreshAll();
