@@ -29,9 +29,6 @@
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             margin: 0;
             min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
             padding: 24px 12px;
 
             background: radial-gradient(circle at 30% 20%, rgba(29,78,216,0.45), transparent 60%),
@@ -41,11 +38,13 @@
             -webkit-backdrop-filter: blur(8px);
 
             color: var(--text);
+            overflow-x: hidden; /* por si acaso algo se desborda 1-2px */
         }
 
         .app-shell {
             width: 100%;
             max-width: 720px;
+            margin: 0 auto;  /* 👈 centra el bloque */
             background: rgba(255,255,255,0.92);
             border-radius: var(--radius-lg);
             box-shadow: 0 18px 40px rgba(15,23,42,0.32);
@@ -204,12 +203,11 @@
 
         .slides {
             display: flex;
-            width: 300%; /* 3 slides */
             transition: transform 0.25s ease-out;
         }
 
         .slide {
-            width: 100%;
+            min-width: 100%;   /* cada slide ocupa exactamente el ancho del shell */
             flex-shrink: 0;
         }
 
@@ -600,6 +598,32 @@
             margin-top: 6px;
         }
 
+        /* Filtros por línea (reutilizado para ambas secciones) */
+        .nearby-filter {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-bottom: 6px;
+            font-size: 11px;
+        }
+
+        .nearby-filter label {
+            color: var(--muted);
+        }
+
+        .nearby-line-input {
+            padding: 6px 8px;
+            border-radius: 999px;
+            border: 1px solid #cbd5e1;
+            font-size: 13px;
+            outline: none;
+        }
+
+        .nearby-line-input:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 1px rgba(37,99,235,0.35);
+        }
+
         @media (max-width: 480px) {
             body {
                 padding: 12px 8px;
@@ -660,7 +684,7 @@
     <main class="main">
         <!-- Tabs -->
         <div class="tabs">
-            <button class="tab-btn active" data-index="0">Trabajo-Casa</button>
+            <button class="tab-btn active" data-index="0">Favoritas</button>
             <button class="tab-btn" data-index="1">Mis paradas</button>
             <button class="tab-btn" data-index="2">Cerca de mí</button>
         </div>
@@ -713,7 +737,7 @@
                     </article>
                 </section>
 
-                <!-- Slide 1: Mis paradas (añadir dinámicas) -->
+                <!-- Slide 1: Mis paradas (añadir dinámicas + filtro) -->
                 <section class="slide accordion" data-slide="1">
                     <section class="dynamic-controls">
                         <div class="dynamic-title">Añadir otra parada</div>
@@ -729,15 +753,26 @@
                             <button type="submit" class="dynamic-button">Añadir</button>
                         </form>
                         <div class="dynamic-help">
-                            Se creará un nuevo acordeón igual que los demás, con llegadas en tiempo real.
+                            Se creará un nuevo acordeón con llegadas en tiempo real.
                             Puedes ver la ubicación en mapa y la ruta andando desde Google Maps.
                         </div>
                     </section>
 
+                    <div class="nearby-filter">
+                        <label for="my-line-input">Filtrar mis paradas por línea (opcional)</label>
+                        <input
+                                id="my-line-input"
+                                class="nearby-line-input"
+                                type="text"
+                                inputmode="numeric"
+                                placeholder="Ej: 66, 137..."
+                        />
+                    </div>
+
                     <div id="dynamic-stops"></div>
                 </section>
 
-                <!-- Slide 2: Paradas cercanas (Top 34) -->
+                <!-- Slide 2: Paradas cercanas (Top 34 + filtro) -->
                 <section class="slide accordion" data-slide="2">
                     <section class="nearby-section">
                         <div class="nearby-title">
@@ -747,6 +782,19 @@
                         <div class="nearby-status" id="nearby-status">
                             Usa el botón de refrescar para buscar paradas cerca de ti.
                         </div>
+
+                        <!-- Filtro por línea -->
+                        <div class="nearby-filter">
+                            <label for="nearby-line-input">Filtrar paradas cercanas por línea (opcional)</label>
+                            <input
+                                    id="nearby-line-input"
+                                    class="nearby-line-input"
+                                    type="text"
+                                    inputmode="numeric"
+                                    placeholder="Ej: 66, 137..."
+                            />
+                        </div>
+
                         <div id="nearby-accordion"></div>
                     </section>
                 </section>
@@ -763,8 +811,12 @@
     const BASE_URL_V2 = "https://openapi.emtmadrid.es/v2";
     const BASE_URL_V1 = "https://openapi.emtmadrid.es/v1";
 
-    // Coordenadas de paradas
+    // Coordenadas y líneas de paradas
     const STOP_COORDS = {};
+    const STOP_LINES  = {};
+
+    // Cache de paradas cercanas crudas
+    let nearbyStopsCache = [];
 
     let userLocation = null;
 
@@ -786,6 +838,9 @@
     const nearbyStatusEl = document.getElementById("nearby-status");
     const nearbyAccordionEl = document.getElementById("nearby-accordion");
 
+    const myLineInput = document.getElementById("my-line-input");
+    const nearbyLineInput = document.getElementById("nearby-line-input");
+
     // --- Slider tabs ---
     const tabs = document.querySelectorAll(".tab-btn");
     const slidesContainer = document.getElementById("slides");
@@ -805,6 +860,36 @@
             setSlide(idx);
         });
     });
+
+    // --- Helpers líneas ---
+    function normalizeLine(l) {
+        if (l == null) return null;
+        return String(l).trim().replace(/^0+/, "") || "0";
+    }
+
+    function getStopLinesFromRawStop(rawStop) {
+        if (!rawStop) return [];
+
+        // dataLine: [{ line: "066", label: "66", ... }]
+        if (Array.isArray(rawStop.dataLine)) {
+            return rawStop.dataLine
+                .map(l => normalizeLine(l.label || l.line))
+                .filter(Boolean);
+        }
+
+        // lines como array
+        if (Array.isArray(rawStop.lines)) {
+            return rawStop.lines.map(l => normalizeLine(l));
+        }
+
+        // lines como string "66-137"
+        if (typeof rawStop.lines === "string") {
+            const matches = rawStop.lines.match(/\d+/g);
+            return matches ? matches.map(x => normalizeLine(x)) : [];
+        }
+
+        return [];
+    }
 
     // --- GEOLOCALIZACIÓN ---
     function updateUserLocation() {
@@ -960,9 +1045,9 @@
         return data;
     }
 
-    // ---- DETALLE DE PARADA PARA COORDENADAS (via API v1) ----
+    // ---- DETALLE DE PARADA PARA COORDENADAS + LÍNEAS (via API v1) ----
     async function fetchStopCoords(stopId) {
-        if (STOP_COORDS[stopId]) return STOP_COORDS[stopId];
+        if (STOP_COORDS[stopId] && STOP_LINES[stopId]) return STOP_COORDS[stopId];
         if (!accessToken) {
             await login();
         }
@@ -1010,6 +1095,12 @@
                 const coords = stopObj.geometry.coordinates;
                 lon = parseFloat(coords[0]); // [lon, lat]
                 lat = parseFloat(coords[1]);
+            }
+
+            // Guardar líneas de la parada
+            const lines = getStopLinesFromRawStop(stopObj);
+            if (lines.length) {
+                STOP_LINES[stopId] = lines;
             }
         }
 
@@ -1156,11 +1247,11 @@
                 const textBlock = document.createElement("div");
                 textBlock.className = "bus-text";
                 textBlock.innerHTML = `
-            <div class="bus-main">${arr.destination || "Destino no disponible"}</div>
-            <div class="bus-sub">
-              Distancia aprox bus-parada: ${arr.DistanceBus != null ? arr.DistanceBus + " m" : "-"}
-            </div>
-          `;
+                    <div class="bus-main">${arr.destination || "Destino no disponible"}</div>
+                    <div class="bus-sub">
+                        Distancia aprox bus-parada: ${arr.DistanceBus != null ? arr.DistanceBus + " m" : "-"}
+                    </div>
+                `;
 
                 left.appendChild(lineBadge);
                 left.appendChild(textBlock);
@@ -1225,7 +1316,7 @@
     }
 
     // ---- RENDER PARADAS CERCANAS COMO ACORDEONES ----
-    async function renderNearbyStops(stops) {
+    async function renderNearbyStops(stops, filterLine) {
         if (!nearbyAccordionEl) return;
         nearbyAccordionEl.innerHTML = "";
 
@@ -1238,6 +1329,7 @@
         }
 
         const baseIds = new Set(STOPS.map(s => String(s.id)));
+        const normalizedFilter = filterLine ? normalizeLine(filterLine) : "";
 
         const filtered = stops
             .map(stop => {
@@ -1248,14 +1340,23 @@
                     stop.id ??
                     stop.stopNum ??
                     null;
-                return { raw: stop, stopId };
+
+                const lines = getStopLinesFromRawStop(stop);
+
+                return { raw: stop, stopId, lines };
             })
-            .filter(s => s.stopId != null && !baseIds.has(String(s.stopId)));
+            .filter(s => s.stopId != null && !baseIds.has(String(s.stopId)))
+            .filter(s => {
+                if (!normalizedFilter) return true;
+                return s.lines.some(l => l === normalizedFilter);
+            });
 
         if (!filtered.length) {
             const div = document.createElement("div");
             div.className = "empty";
-            div.textContent = "Las paradas cercanas ya están entre tus paradas favoritas o añadidas.";
+            div.textContent = normalizedFilter
+                ? `No hay paradas cercanas donde pase la línea ${normalizedFilter}.`
+                : "Las paradas cercanas ya están entre tus paradas favoritas o añadidas.";
             nearbyAccordionEl.appendChild(div);
             return;
         }
@@ -1284,24 +1385,24 @@
             article.className = "accordion-item";
             article.dataset.stopId = String(idNum);
             article.innerHTML = `
-        <button class="accordion-header">
-          <div class="accordion-header-main">
-            <div class="stop-name">${name}</div>
-            <div class="stop-subtitle">Parada ${idNum} · Cercana a tu ubicación</div>
-          </div>
-          <span class="badge">${idNum}</span>
-        </button>
-        <div class="accordion-panel">
-          <div class="walk-time" id="walk-${idNum}"></div>
-          <div class="reach-time" id="reach-${idNum}"></div>
-          <div id="location-${idNum}" class="location-link-container"></div>
-          <div class="status" id="status-${idNum}">
-            <span class="status-dot"></span>
-            <span>Cargando…</span>
-          </div>
-          <ul class="bus-list" id="buses-${idNum}"></ul>
-        </div>
-      `;
+                <button class="accordion-header">
+                  <div class="accordion-header-main">
+                    <div class="stop-name">${name}</div>
+                    <div class="stop-subtitle">Parada ${idNum} · Cercana a tu ubicación</div>
+                  </div>
+                  <span class="badge">${idNum}</span>
+                </button>
+                <div class="accordion-panel">
+                  <div class="walk-time" id="walk-${idNum}"></div>
+                  <div class="reach-time" id="reach-${idNum}"></div>
+                  <div id="location-${idNum}" class="location-link-container"></div>
+                  <div class="status" id="status-${idNum}">
+                    <span class="status-dot"></span>
+                    <span>Cargando…</span>
+                  </div>
+                  <ul class="bus-list" id="buses-${idNum}"></ul>
+                </div>
+            `;
 
             nearbyAccordionEl.appendChild(article);
 
@@ -1332,7 +1433,11 @@
 
         try {
             const stops = await getNearbyStops();
-            await renderNearbyStops(stops);
+            nearbyStopsCache = stops;
+
+            const currentFilter = nearbyLineInput ? nearbyLineInput.value.trim() : "";
+
+            await renderNearbyStops(stops, currentFilter);
             nearbyStatusEl.textContent = "Mostrando las paradas cercanas a tu ubicación.";
         } catch (err) {
             console.error(err);
@@ -1340,6 +1445,26 @@
                 "No se han podido cargar las paradas cercanas.";
             if (nearbyAccordionEl) nearbyAccordionEl.innerHTML = "";
         }
+    }
+
+    // ---- FILTRAR MIS PARADAS POR LÍNEA ----
+    function filterMyStopsByLine(filterVal) {
+        const normalized = filterVal ? normalizeLine(filterVal) : "";
+        const items = dynamicStopsContainer.querySelectorAll(".accordion-item");
+
+        items.forEach(item => {
+            const stopId = parseInt(item.dataset.stopId, 10);
+            if (!normalized) {
+                item.style.display = "";
+                return;
+            }
+            const lines = STOP_LINES[stopId] || [];
+            if (lines.some(l => l === normalized)) {
+                item.style.display = "";
+            } else {
+                item.style.display = "none";
+            }
+        });
     }
 
     // ---- REFRESH GLOBAL ----
@@ -1416,24 +1541,24 @@
         article.dataset.stopId = String(stopId);
 
         article.innerHTML = `
-        <button class="accordion-header">
-          <div class="accordion-header-main">
-            <div class="stop-name">Parada ${stopId}</div>
-            <div class="stop-subtitle">Número de parada ${stopId}</div>
-          </div>
-          <span class="badge">${stopId}</span>
-        </button>
-        <div class="accordion-panel">
-          <div class="walk-time" id="walk-${stopId}"></div>
-          <div class="reach-time" id="reach-${stopId}"></div>
-          <div id="location-${stopId}" class="location-link-container"></div>
-          <div class="status" id="status-${stopId}">
-            <span class="status-dot"></span>
-            <span>Datos cargados.</span>
-          </div>
-          <ul class="bus-list" id="buses-${stopId}"></ul>
-        </div>
-      `;
+            <button class="accordion-header">
+              <div class="accordion-header-main">
+                <div class="stop-name">Parada ${stopId}</div>
+                <div class="stop-subtitle">Número de parada ${stopId}</div>
+              </div>
+              <span class="badge">${stopId}</span>
+            </button>
+            <div class="accordion-panel">
+              <div class="walk-time" id="walk-${stopId}"></div>
+              <div class="reach-time" id="reach-${stopId}"></div>
+              <div id="location-${stopId}" class="location-link-container"></div>
+              <div class="status" id="status-${stopId}">
+                <span class="status-dot"></span>
+                <span>Datos cargados.</span>
+              </div>
+              <ul class="bus-list" id="buses-${stopId}"></ul>
+            </div>
+        `;
 
         dynamicStopsContainer.appendChild(article);
 
@@ -1444,6 +1569,11 @@
 
         updateLocationLink(stopId);
         renderStop(stopConfig, arrivals);
+
+        // Reaplicar filtro actual si hay
+        if (myLineInput && myLineInput.value.trim()) {
+            filterMyStopsByLine(myLineInput.value.trim());
+        }
     }
 
     if (addStopForm && stopIdInput) {
@@ -1463,11 +1593,25 @@
         });
     }
 
+    // ---- LISTENERS DE FILTROS ----
+    if (myLineInput) {
+        myLineInput.addEventListener("input", () => {
+            filterMyStopsByLine(myLineInput.value.trim());
+        });
+    }
+
+    if (nearbyLineInput) {
+        nearbyLineInput.addEventListener("input", () => {
+            const val = nearbyLineInput.value.trim();
+            renderNearbyStops(nearbyStopsCache, val);
+        });
+    }
+
     // ---- INIT ----
     setupAccordion();
     setSlide(0);
     refreshAll();
-    setInterval(refreshAll, 30000);
+    setInterval(refreshAll, 15000);
 
     if (refreshBtn) {
         refreshBtn.addEventListener("click", async () => {
