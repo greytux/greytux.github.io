@@ -10,7 +10,6 @@
             --card-bg: #ffffff;
             --surface: #f9fafb;
             --primary: #005bb7;
-            --primary-soft: rgba(0,91,183,0.06);
             --urgent: #fee2e2;
             --soon: #dcfce7;
             --text: #111827;
@@ -35,7 +34,6 @@
             align-items: flex-start;
             padding: 24px 12px;
 
-            /* Fondo azul oscuro con blur */
             background: radial-gradient(circle at 30% 20%, rgba(29,78,216,0.45), transparent 60%),
             radial-gradient(circle at 80% 80%, rgba(2,132,199,0.45), transparent 55%),
             #0b1220;
@@ -88,7 +86,6 @@
             gap: 4px;
         }
 
-        /* Botón redondo de refrescar */
         .refresh-btn {
             width: 36px;
             height: 36px;
@@ -169,10 +166,56 @@
             background: #bbf7d0;
         }
 
-        /* Accordion de paradas */
+        /* Tabs + Slider */
+        .main {
+            background: var(--surface);
+        }
+
+        .tabs {
+            display: flex;
+            padding: 6px 10px 0;
+            gap: 6px;
+            border-bottom: 1px solid var(--border-subtle);
+            background: #f3f4f6;
+        }
+
+        .tab-btn {
+            flex: 1;
+            border: none;
+            padding: 6px 8px;
+            font-size: 12px;
+            border-radius: 999px;
+            cursor: pointer;
+            background: transparent;
+            color: var(--muted);
+            font-weight: 500;
+        }
+
+        .tab-btn.active {
+            background: #e0e7ff;
+            color: #111827;
+            box-shadow: inset 0 0 0 1px #c7d2fe;
+        }
+
+        .slider {
+            overflow: hidden;
+            position: relative;
+        }
+
+        .slides {
+            display: flex;
+            width: 300%; /* 3 slides */
+            transition: transform 0.25s ease-out;
+        }
+
+        .slide {
+            width: 100%;
+            flex-shrink: 0;
+        }
+
+        /* Accordion base */
         .accordion {
             padding: 10px 14px 14px;
-            background: var(--surface);
         }
 
         .accordion-item {
@@ -326,7 +369,6 @@
             min-width: 0;
         }
 
-        /* Panel LED para la línea */
         .line-badge {
             position: relative;
             min-width: 70px;
@@ -430,7 +472,6 @@
             padding: 4px 2px 6px;
         }
 
-        /* Enlace ver ubicación */
         .location-link {
             font-size: 11px;
             color: #2563eb;
@@ -444,9 +485,11 @@
 
         .location-link-container {
             margin: 4px 0 6px;
+            font-size: 11px;
+            color: var(--muted);
         }
 
-        /* Formulario dinámico de paradas */
+        /* Controles dinámicos */
         .dynamic-controls {
             margin-top: 12px;
             padding: 10px 12px 12px;
@@ -522,7 +565,7 @@
 
         /* Sección de paradas cercanas */
         .nearby-section {
-            margin-top: 14px;
+            margin-top: 10px;
             padding: 10px 12px 12px;
             background: #eef2ff;
             border-radius: 12px;
@@ -614,98 +657,118 @@
         </div>
     </section>
 
-    <main class="accordion">
-        <!-- Parada fija 3224 -->
-        <article class="accordion-item open" data-stop-id="3224">
-            <button class="accordion-header">
-                <div class="accordion-header-main">
-                    <div class="stop-name">Herrera Oria – Labastida (trabajo)</div>
-                    <div class="stop-subtitle">Parada 3224 · Todas las líneas</div>
-                </div>
-                <span class="badge">3224</span>
-            </button>
-            <div class="accordion-panel">
-                <div class="walk-time" id="walk-3224"></div>
-                <div class="reach-time" id="reach-3224"></div>
-                <div id="location-3224" class="location-link-container"></div>
-                <div class="status" id="status-3224">
-                    <span class="status-dot"></span>
-                    <span>Cargando…</span>
-                </div>
-                <ul class="bus-list" id="buses-3224"></ul>
-            </div>
-        </article>
+    <main class="main">
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" data-index="0">Trabajo-Casa</button>
+            <button class="tab-btn" data-index="1">Mis paradas</button>
+            <button class="tab-btn" data-index="2">Cerca de mí</button>
+        </div>
 
-        <!-- Parada fija 2677 -->
-        <article class="accordion-item" data-stop-id="2677">
-            <button class="accordion-header">
-                <div class="accordion-header-main">
-                    <div class="stop-name">Fuente de la Carra → centro</div>
-                    <div class="stop-subtitle">Parada 2677 · Líneas 66 y 137</div>
-                </div>
-                <span class="badge">2677</span>
-            </button>
-            <div class="accordion-panel">
-                <div class="walk-time" id="walk-2677"></div>
-                <div class="reach-time" id="reach-2677"></div>
-                <div id="location-2677" class="location-link-container"></div>
-                <div class="status" id="status-2677">
-                    <span class="status-dot"></span>
-                    <span>Cargando…</span>
-                </div>
-                <ul class="bus-list" id="buses-2677"></ul>
-            </div>
-        </article>
+        <!-- Slider -->
+        <div class="slider">
+            <div class="slides" id="slides">
+                <!-- Slide 0: Paradas favoritas (trabajo + 2677) -->
+                <section class="slide accordion" data-slide="0">
+                    <!-- Parada fija 3224 -->
+                    <article class="accordion-item open" data-stop-id="3224">
+                        <button class="accordion-header">
+                            <div class="accordion-header-main">
+                                <div class="stop-name">Herrera Oria – Labastida (trabajo)</div>
+                                <div class="stop-subtitle">Parada 3224 · Todas las líneas</div>
+                            </div>
+                            <span class="badge">3224</span>
+                        </button>
+                        <div class="accordion-panel">
+                            <div class="walk-time" id="walk-3224"></div>
+                            <div class="reach-time" id="reach-3224"></div>
+                            <div id="location-3224" class="location-link-container"></div>
+                            <div class="status" id="status-3224">
+                                <span class="status-dot"></span>
+                                <span>Cargando…</span>
+                            </div>
+                            <ul class="bus-list" id="buses-3224"></ul>
+                        </div>
+                    </article>
 
-        <!-- Formulario para añadir nuevas paradas -->
-        <section class="dynamic-controls">
-            <div class="dynamic-title">Añadir otra parada</div>
-            <form id="add-stop-form" class="dynamic-form">
-                <label for="stop-id-input">Parada</label>
-                <input
-                        id="stop-id-input"
-                        class="dynamic-input"
-                        type="number"
-                        inputmode="numeric"
-                        placeholder="Ej: 1234"
-                />
-                <button type="submit" class="dynamic-button">Añadir</button>
-            </form>
-            <div class="dynamic-help">
-                Se creará un nuevo acordeón igual que los demás, con llegadas en tiempo real y tu tiempo andando/margen si es posible.
-            </div>
-            <div id="dynamic-stops"></div>
-        </section>
+                    <!-- Parada fija 2677 -->
+                    <article class="accordion-item" data-stop-id="2677">
+                        <button class="accordion-header">
+                            <div class="accordion-header-main">
+                                <div class="stop-name">Fuente de la Carra → centro</div>
+                                <div class="stop-subtitle">Parada 2677 · Líneas 66 y 137</div>
+                            </div>
+                            <span class="badge">2677</span>
+                        </button>
+                        <div class="accordion-panel">
+                            <div class="walk-time" id="walk-2677"></div>
+                            <div class="reach-time" id="reach-2677"></div>
+                            <div id="location-2677" class="location-link-container"></div>
+                            <div class="status" id="status-2677">
+                                <span class="status-dot"></span>
+                                <span>Cargando…</span>
+                            </div>
+                            <ul class="bus-list" id="buses-2677"></ul>
+                        </div>
+                    </article>
+                </section>
 
-        <!-- Sección de paradas cercanas -->
-        <section class="nearby-section">
-            <div class="nearby-title">
-                Paradas cercanas
-                <span class="nearby-badge">Top 4</span>
+                <!-- Slide 1: Mis paradas (añadir dinámicas) -->
+                <section class="slide accordion" data-slide="1">
+                    <section class="dynamic-controls">
+                        <div class="dynamic-title">Añadir otra parada</div>
+                        <form id="add-stop-form" class="dynamic-form">
+                            <label for="stop-id-input">Parada</label>
+                            <input
+                                    id="stop-id-input"
+                                    class="dynamic-input"
+                                    type="number"
+                                    inputmode="numeric"
+                                    placeholder="Ej: 1234"
+                            />
+                            <button type="submit" class="dynamic-button">Añadir</button>
+                        </form>
+                        <div class="dynamic-help">
+                            Se creará un nuevo acordeón igual que los demás, con llegadas en tiempo real.
+                            Puedes ver la ubicación en mapa y la ruta andando desde Google Maps.
+                        </div>
+                    </section>
+
+                    <div id="dynamic-stops"></div>
+                </section>
+
+                <!-- Slide 2: Paradas cercanas (Top 34) -->
+                <section class="slide accordion" data-slide="2">
+                    <section class="nearby-section">
+                        <div class="nearby-title">
+                            Paradas cercanas
+                            <span class="nearby-badge">Top 34</span>
+                        </div>
+                        <div class="nearby-status" id="nearby-status">
+                            Usa el botón de refrescar para buscar paradas cerca de ti.
+                        </div>
+                        <div id="nearby-accordion"></div>
+                    </section>
+                </section>
             </div>
-            <div class="nearby-status" id="nearby-status">
-                Usa el botón de refrescar para buscar paradas cerca de ti.
-            </div>
-            <div id="nearby-accordion"></div>
-        </section>
+        </div>
     </main>
 </div>
 
 <script>
-    // ⚠️ Sustituye por tus credenciales reales de EMT
+    // ⚠️ Sustituye por tus credenciales reales de EMT (no subas esto público con credenciales reales)
     const USER = "diegojesus.escudero@gmail.com";
     const PASS = "Linares251291?";
 
     const BASE_URL_V2 = "https://openapi.emtmadrid.es/v2";
     const BASE_URL_V1 = "https://openapi.emtmadrid.es/v1";
 
-    // Coordenadas de paradas (se rellenan dinámicamente usando la API detail v1 o nearby)
+    // Coordenadas de paradas
     const STOP_COORDS = {};
 
     let userLocation = null;
-    const WALK_SPEED_KMH = 5; // km/h
 
-    // Paradas fijas + las que se vayan añadiendo manualmente
+    // Paradas fijas + dinámicas
     const STOPS = [
         { id: 3224, label: "Herrera Oria - Labastida (TRABAJO) - Parada 3224" },
         { id: 2677, label: "Fuente de la Carra hacia el centro - Parada 2677", filterLines: ["66", "137"] }
@@ -723,7 +786,27 @@
     const nearbyStatusEl = document.getElementById("nearby-status");
     const nearbyAccordionEl = document.getElementById("nearby-accordion");
 
-    // --- GEOLOCALIZACIÓN: se llama en cada refreshAll ---
+    // --- Slider tabs ---
+    const tabs = document.querySelectorAll(".tab-btn");
+    const slidesContainer = document.getElementById("slides");
+    let currentSlideIndex = 0;
+
+    function setSlide(index) {
+        currentSlideIndex = index;
+        slidesContainer.style.transform = `translateX(-${index * 100}%)`;
+        tabs.forEach((t, i) => {
+            t.classList.toggle("active", i === index);
+        });
+    }
+
+    tabs.forEach(tab => {
+        tab.addEventListener("click", () => {
+            const idx = parseInt(tab.dataset.index, 10);
+            setSlide(idx);
+        });
+    });
+
+    // --- GEOLOCALIZACIÓN ---
     function updateUserLocation() {
         return new Promise((resolve) => {
             if (!("geolocation" in navigator)) {
@@ -759,40 +842,7 @@
         });
     }
 
-    function getDistanceMeters(lat1, lon1, lat2, lon2) {
-        const R = 6371000;
-        const toRad = (deg) => (deg * Math.PI) / 180;
-
-        const dLat = toRad(lat2 - lat1);
-        const dLon = toRad(lon2 - lon1);
-        const a =
-            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(toRad(lat1)) *
-            Math.cos(toRad(lat2)) *
-            Math.sin(dLon / 2) *
-            Math.sin(dLon / 2);
-
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
-    }
-
-    // Solo calcula minutos si hay userLocation y coords de la parada
-    function getWalkingMinutes(stopId) {
-        if (!userLocation) return null;
-        const stop = STOP_COORDS[stopId];
-        if (!stop) return null;
-
-        const dist = getDistanceMeters(
-            userLocation.lat,
-            userLocation.lon,
-            stop.lat,
-            stop.lon
-        );
-        const minutes = (dist / 1000 / WALK_SPEED_KMH) * 60;
-        return Math.round(minutes);
-    }
-
-    // --- Actualiza el enlace "Ver ubicación en mapa" para una parada ---
+    // Enlace "Ver ubicación" + "Ver ruta andando"
     function updateLocationLink(stopId) {
         const container = document.getElementById(`location-${stopId}`);
         if (!container) return;
@@ -803,15 +853,42 @@
             return;
         }
 
-        const mapUrl = `https://www.google.com/maps?q=${coords.lat},${coords.lon}`;
-        container.innerHTML = `
+        const mapPointUrl = `https://www.google.com/maps?q=${coords.lat},${coords.lon}`;
+
+        let html = `
             <a class="location-link"
-               href="${mapUrl}"
+               href="${mapPointUrl}"
                target="_blank"
                rel="noopener noreferrer">
                Ver ubicación en mapa
             </a>
         `;
+
+        if (userLocation) {
+            const routeUrl =
+                `https://www.google.com/maps/dir/?api=1` +
+                `&origin=${userLocation.lat},${userLocation.lon}` +
+                `&destination=${coords.lat},${coords.lon}` +
+                `&travelmode=walking`;
+
+            html += `
+                <span style="margin: 0 6px; color: #9ca3af;">·</span>
+                <a class="location-link"
+                   href="${routeUrl}"
+                   target="_blank"
+                   rel="noopener noreferrer">
+                   Ver ruta andando
+                </a>
+            `;
+        } else {
+            html += `
+                <span style="margin-left: 6px; color: #9ca3af;">
+                    (activa la geolocalización para ver la ruta andando)
+                </span>
+            `;
+        }
+
+        container.innerHTML = html;
     }
 
     // ---- LOGIN EMT ----
@@ -916,7 +993,6 @@
         let lat = null;
         let lon = null;
 
-        // Según el ejemplo de EMT: data[0].stops[0].geometry.coordinates
         if (
             Array.isArray(json.data) &&
             json.data.length > 0 &&
@@ -932,8 +1008,7 @@
                 stopObj.geometry.coordinates.length >= 2
             ) {
                 const coords = stopObj.geometry.coordinates;
-                // EMT devuelve [lon, lat]
-                lon = parseFloat(coords[0]);
+                lon = parseFloat(coords[0]); // [lon, lat]
                 lat = parseFloat(coords[1]);
             }
         }
@@ -941,7 +1016,6 @@
         if (lat != null && lon != null && !Number.isNaN(lat) && !Number.isNaN(lon)) {
             STOP_COORDS[stopId] = { lat, lon };
             console.log("Coords parada", stopId, STOP_COORDS[stopId]);
-            // Actualiza enlace si ya existe contenedor
             updateLocationLink(stopId);
             return STOP_COORDS[stopId];
         }
@@ -1005,24 +1079,14 @@
         const { id, filterLines } = stopConfig;
         const listEl = document.getElementById(`buses-${id}`);
         const statusWrapper = document.getElementById(`status-${id}`);
+        const reachEl = document.getElementById(`reach-${id}`);
+        const walkEl = document.getElementById(`walk-${id}`);
+
         if (!listEl || !statusWrapper) return;
 
         const statusText = statusWrapper.querySelector("span:nth-child(2)");
 
-        const walkEl = document.getElementById(`walk-${id}`);
-        const reachEl = document.getElementById(`reach-${id}`);
-
-        // Tiempo andando solo si hay geoloc + coords
-        let walkingMinutes = null;
-        if (walkEl) {
-            walkingMinutes = getWalkingMinutes(id);
-            if (walkingMinutes != null) {
-                walkEl.textContent = `Tiempo andando aproximado hasta la parada: ${walkingMinutes} min`;
-            } else {
-                walkEl.textContent = "";
-            }
-        }
-
+        if (walkEl) walkEl.textContent = "";
         listEl.innerHTML = "";
 
         let filtered = arrivals;
@@ -1032,7 +1096,6 @@
             );
         }
 
-        // Próximo bus (minutos)
         let nextBusMinutes = null;
         filtered.forEach(arr => {
             if (arr.estimateArrive != null) {
@@ -1044,18 +1107,8 @@
         });
 
         if (reachEl) {
-            if (walkingMinutes != null && nextBusMinutes != null) {
-                const diff = nextBusMinutes - walkingMinutes;
-                if (diff >= 0) {
-                    reachEl.textContent =
-                        `Si sales ahora, llegas con ~${diff} min de margen al próximo bus.`;
-                } else {
-                    reachEl.textContent =
-                        `Si sales ahora, el próximo bus llega ~${Math.abs(diff)} min antes que tú.`;
-                }
-            } else if (nextBusMinutes != null) {
-                reachEl.textContent =
-                    `Próximo bus en ~${nextBusMinutes} min. Sin estimar tu tiempo andando.`;
+            if (nextBusMinutes != null) {
+                reachEl.textContent = `Próximo bus en ~${nextBusMinutes} min.`;
             } else {
                 reachEl.textContent = "";
             }
@@ -1105,7 +1158,7 @@
                 textBlock.innerHTML = `
             <div class="bus-main">${arr.destination || "Destino no disponible"}</div>
             <div class="bus-sub">
-              Distancia aprox: ${arr.DistanceBus != null ? arr.DistanceBus + " m" : "-"}
+              Distancia aprox bus-parada: ${arr.DistanceBus != null ? arr.DistanceBus + " m" : "-"}
             </div>
           `;
 
@@ -1184,7 +1237,6 @@
             return;
         }
 
-        // No repetir paradas que ya están en STOPS (3224, 2677, dinámicas)
         const baseIds = new Set(STOPS.map(s => String(s.id)));
 
         const filtered = stops
@@ -1203,15 +1255,15 @@
         if (!filtered.length) {
             const div = document.createElement("div");
             div.className = "empty";
-            div.textContent = "Las paradas cercanas ya están entre tus paradas favoritas.";
+            div.textContent = "Las paradas cercanas ya están entre tus paradas favoritas o añadidas.";
             nearbyAccordionEl.appendChild(div);
             return;
         }
 
-        const top4 = filtered.slice(0, 4);
+        const topN = filtered.slice(0, 34);
         const stopConfigs = [];
 
-        for (const { raw: stop, stopId } of top4) {
+        for (const { raw: stop, stopId } of topN) {
             const idNum = parseInt(stopId, 10);
             const name =
                 stop.name ??
@@ -1219,7 +1271,6 @@
                 stop.StopName ??
                 `Parada ${idNum}`;
 
-            // Guardamos coords de geometry en STOP_COORDS para walking + mapa
             if (stop.geometry && Array.isArray(stop.geometry.coordinates)) {
                 const coords = stop.geometry.coordinates;
                 const lon = parseFloat(coords[0]);
@@ -1230,7 +1281,6 @@
             }
 
             const article = document.createElement("article");
-            // Cerrados por defecto
             article.className = "accordion-item";
             article.dataset.stopId = String(idNum);
             article.innerHTML = `
@@ -1260,13 +1310,11 @@
                 article.classList.toggle("open");
             });
 
-            // Pintamos enlace de mapa si tenemos coords
             updateLocationLink(idNum);
 
             stopConfigs.push({ id: idNum });
         }
 
-        // Cargamos llegadas y tiempos para cada una de las cercanas
         await Promise.all(stopConfigs.map(cfg => refreshStop(cfg)));
     }
 
@@ -1275,7 +1323,7 @@
 
         if (!userLocation) {
             nearbyStatusEl.textContent =
-                "Activa la geolocalización del navegador para ver paradas cercanas.";
+                "Activa la geolocalización del navegador para ver paradas cercanas y rutas andando.";
             if (nearbyAccordionEl) nearbyAccordionEl.innerHTML = "";
             return;
         }
@@ -1300,21 +1348,16 @@
             globalStatusEl.textContent = "Actualizando todas las paradas…";
         }
 
-        // 1) Actualizar ubicación actual antes de recalcular tiempos
         await updateUserLocation();
 
-        // 2) Obtener coords de paradas favoritas (3224, 2677 y las dinámicas ya presentes)
         await Promise.all(
             STOPS.map(s => fetchStopCoords(s.id).catch(() => null))
         );
 
-        // Actualizar enlaces de mapa para paradas favoritas (por si ya tenemos coords)
         STOPS.forEach(s => updateLocationLink(s.id));
 
-        // 3) Refrescar paradas favoritas (fijas + dinámicas)
         await Promise.all(STOPS.map(stop => refreshStop(stop)));
 
-        // 4) Refrescar paradas cercanas en base a la ubicación recién actualizada
         await refreshNearbyStops();
 
         if (globalStatusEl) {
@@ -1348,7 +1391,6 @@
             return;
         }
 
-        // Verificamos que la parada existe y tiene datos
         let arrivals;
         try {
             arrivals = await getArrivals(stopId);
@@ -1363,7 +1405,6 @@
         const stopConfig = { id: stopId, label: `Parada ${stopId}` };
         STOPS.push(stopConfig);
 
-        // Intentamos obtener coords desde API v1
         try {
             await fetchStopCoords(stopId);
         } catch (e) {
@@ -1401,9 +1442,7 @@
             article.classList.toggle("open");
         });
 
-        // Pintar enlace de mapa si ya tenemos coords
         updateLocationLink(stopId);
-
         renderStop(stopConfig, arrivals);
     }
 
@@ -1426,6 +1465,7 @@
 
     // ---- INIT ----
     setupAccordion();
+    setSlide(0);
     refreshAll();
     setInterval(refreshAll, 30000);
 
