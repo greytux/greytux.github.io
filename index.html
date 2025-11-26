@@ -857,7 +857,9 @@
 
     // ---- DETALLE DE PARADA PARA COORDENADAS (via API v1) ----
     async function fetchStopCoords(stopId) {
+        // Si ya las tenemos en caché, devolvemos directamente
         if (STOP_COORDS[stopId]) return STOP_COORDS[stopId];
+
         if (!accessToken) {
             await login();
         }
@@ -880,7 +882,7 @@
         const json = await res.json();
         console.log("DETAIL JSON stop", stopId, json);
 
-        if (json.code !== "00") {
+        if (json.code !== "00" || json.code === "01" ) {
             console.warn("Error API detalle parada:", json.description || json.code);
             return null;
         }
@@ -888,36 +890,35 @@
         let lat = null;
         let lon = null;
 
-        if (Array.isArray(json.data) && json.data.length > 0) {
-            const d0 = json.data[0];
-            if (d0.geometry && Array.isArray(d0.geometry.coordinates)) {
-                const coords = d0.geometry.coordinates;
+        // Según tu ejemplo: data[0].stops[0].geometry.coordinates
+        if (
+            Array.isArray(json.data) &&
+            json.data.length > 0 &&
+            json.data[0].stops &&
+            Array.isArray(json.data[0].stops) &&
+            json.data[0].stops.length > 0
+        ) {
+            const stopObj = json.data[0].stops[0];
+
+            if (
+                stopObj.geometry &&
+                Array.isArray(stopObj.geometry.coordinates) &&
+                stopObj.geometry.coordinates.length >= 2
+            ) {
+                const coords = stopObj.geometry.coordinates;
+                // OJO: EMT devuelve [lon, lat]
                 lon = parseFloat(coords[0]);
                 lat = parseFloat(coords[1]);
-            } else {
-                const latCandidates = ["lat", "Lat", "latitude", "Latitude", "GeographicY", "Y"];
-                const lonCandidates = ["lon", "Lon", "longitude", "Longitude", "GeographicX", "X"];
-
-                for (const lk of latCandidates) {
-                    if (d0[lk] != null) {
-                        lat = parseFloat(d0[lk]);
-                        break;
-                    }
-                }
-                for (const ok of lonCandidates) {
-                    if (d0[ok] != null) {
-                        lon = parseFloat(d0[ok]);
-                        break;
-                    }
-                }
             }
         }
 
         if (lat != null && lon != null && !Number.isNaN(lat) && !Number.isNaN(lon)) {
             STOP_COORDS[stopId] = { lat, lon };
+            console.log("Coords parada", stopId, STOP_COORDS[stopId]);
             return STOP_COORDS[stopId];
         }
 
+        console.warn("No se han podido extraer coords válidas para la parada", stopId);
         return null;
     }
 
