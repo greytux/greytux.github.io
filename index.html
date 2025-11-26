@@ -435,12 +435,15 @@
             font-size: 11px;
             color: #2563eb;
             text-decoration: none;
-            margin-top: 4px;
             display: inline-block;
         }
 
         .location-link:hover {
             text-decoration: underline;
+        }
+
+        .location-link-container {
+            margin: 4px 0 6px;
         }
 
         /* Formulario dinámico de paradas */
@@ -624,6 +627,7 @@
             <div class="accordion-panel">
                 <div class="walk-time" id="walk-3224"></div>
                 <div class="reach-time" id="reach-3224"></div>
+                <div id="location-3224" class="location-link-container"></div>
                 <div class="status" id="status-3224">
                     <span class="status-dot"></span>
                     <span>Cargando…</span>
@@ -644,6 +648,7 @@
             <div class="accordion-panel">
                 <div class="walk-time" id="walk-2677"></div>
                 <div class="reach-time" id="reach-2677"></div>
+                <div id="location-2677" class="location-link-container"></div>
                 <div class="status" id="status-2677">
                     <span class="status-dot"></span>
                     <span>Cargando…</span>
@@ -687,13 +692,14 @@
 </div>
 
 <script>
+    // ⚠️ Sustituye por tus credenciales reales de EMT
     const USER = "diegojesus.escudero@gmail.com";
     const PASS = "Linares251291?";
 
     const BASE_URL_V2 = "https://openapi.emtmadrid.es/v2";
     const BASE_URL_V1 = "https://openapi.emtmadrid.es/v1";
 
-    // Coordenadas de paradas (se rellenan dinámicamente usando la API detail v1)
+    // Coordenadas de paradas (se rellenan dinámicamente usando la API detail v1 o nearby)
     const STOP_COORDS = {};
 
     let userLocation = null;
@@ -786,6 +792,28 @@
         return Math.round(minutes);
     }
 
+    // --- Actualiza el enlace "Ver ubicación en mapa" para una parada ---
+    function updateLocationLink(stopId) {
+        const container = document.getElementById(`location-${stopId}`);
+        if (!container) return;
+
+        const coords = STOP_COORDS[stopId];
+        if (!coords) {
+            container.innerHTML = "";
+            return;
+        }
+
+        const mapUrl = `https://www.google.com/maps?q=${coords.lat},${coords.lon}`;
+        container.innerHTML = `
+            <a class="location-link"
+               href="${mapUrl}"
+               target="_blank"
+               rel="noopener noreferrer">
+               Ver ubicación en mapa
+            </a>
+        `;
+    }
+
     // ---- LOGIN EMT ----
     async function login() {
         const res = await fetch(`${BASE_URL_V2}/mobilitylabs/user/login/`, {
@@ -857,9 +885,7 @@
 
     // ---- DETALLE DE PARADA PARA COORDENADAS (via API v1) ----
     async function fetchStopCoords(stopId) {
-        // Si ya las tenemos en caché, devolvemos directamente
         if (STOP_COORDS[stopId]) return STOP_COORDS[stopId];
-
         if (!accessToken) {
             await login();
         }
@@ -882,7 +908,7 @@
         const json = await res.json();
         console.log("DETAIL JSON stop", stopId, json);
 
-        if (json.code !== "00" || json.code === "01" ) {
+        if (json.code !== "00") {
             console.warn("Error API detalle parada:", json.description || json.code);
             return null;
         }
@@ -890,7 +916,7 @@
         let lat = null;
         let lon = null;
 
-        // Según tu ejemplo: data[0].stops[0].geometry.coordinates
+        // Según el ejemplo de EMT: data[0].stops[0].geometry.coordinates
         if (
             Array.isArray(json.data) &&
             json.data.length > 0 &&
@@ -906,7 +932,7 @@
                 stopObj.geometry.coordinates.length >= 2
             ) {
                 const coords = stopObj.geometry.coordinates;
-                // OJO: EMT devuelve [lon, lat]
+                // EMT devuelve [lon, lat]
                 lon = parseFloat(coords[0]);
                 lat = parseFloat(coords[1]);
             }
@@ -915,6 +941,8 @@
         if (lat != null && lon != null && !Number.isNaN(lat) && !Number.isNaN(lon)) {
             STOP_COORDS[stopId] = { lat, lon };
             console.log("Coords parada", stopId, STOP_COORDS[stopId]);
+            // Actualiza enlace si ya existe contenedor
+            updateLocationLink(stopId);
             return STOP_COORDS[stopId];
         }
 
@@ -1201,13 +1229,6 @@
                 }
             }
 
-            let locationLinkHtml = "";
-            if (STOP_COORDS[idNum]) {
-                const c = STOP_COORDS[idNum];
-                const mapUrl = `https://www.google.com/maps?q=${c.lat},${c.lon}`;
-                locationLinkHtml = `<a class="location-link" href="${mapUrl}" target="_blank" rel="noopener noreferrer">Ver ubicación en mapa</a>`;
-            }
-
             const article = document.createElement("article");
             // Cerrados por defecto
             article.className = "accordion-item";
@@ -1223,7 +1244,7 @@
         <div class="accordion-panel">
           <div class="walk-time" id="walk-${idNum}"></div>
           <div class="reach-time" id="reach-${idNum}"></div>
-          ${locationLinkHtml}
+          <div id="location-${idNum}" class="location-link-container"></div>
           <div class="status" id="status-${idNum}">
             <span class="status-dot"></span>
             <span>Cargando…</span>
@@ -1238,6 +1259,9 @@
             header.addEventListener("click", () => {
                 article.classList.toggle("open");
             });
+
+            // Pintamos enlace de mapa si tenemos coords
+            updateLocationLink(idNum);
 
             stopConfigs.push({ id: idNum });
         }
@@ -1283,6 +1307,9 @@
         await Promise.all(
             STOPS.map(s => fetchStopCoords(s.id).catch(() => null))
         );
+
+        // Actualizar enlaces de mapa para paradas favoritas (por si ya tenemos coords)
+        STOPS.forEach(s => updateLocationLink(s.id));
 
         // 3) Refrescar paradas favoritas (fijas + dinámicas)
         await Promise.all(STOPS.map(stop => refreshStop(stop)));
@@ -1347,13 +1374,6 @@
         article.className = "accordion-item open";
         article.dataset.stopId = String(stopId);
 
-        let locationLinkHtml = "";
-        if (STOP_COORDS[stopId]) {
-            const c = STOP_COORDS[stopId];
-            const mapUrl = `https://www.google.com/maps?q=${c.lat},${c.lon}`;
-            locationLinkHtml = `<a class="location-link" href="${mapUrl}" target="_blank" rel="noopener noreferrer">Ver ubicación en mapa</a>`;
-        }
-
         article.innerHTML = `
         <button class="accordion-header">
           <div class="accordion-header-main">
@@ -1365,7 +1385,7 @@
         <div class="accordion-panel">
           <div class="walk-time" id="walk-${stopId}"></div>
           <div class="reach-time" id="reach-${stopId}"></div>
-          ${locationLinkHtml}
+          <div id="location-${stopId}" class="location-link-container"></div>
           <div class="status" id="status-${stopId}">
             <span class="status-dot"></span>
             <span>Datos cargados.</span>
@@ -1380,6 +1400,9 @@
         header.addEventListener("click", () => {
             article.classList.toggle("open");
         });
+
+        // Pintar enlace de mapa si ya tenemos coords
+        updateLocationLink(stopId);
 
         renderStop(stopConfig, arrivals);
     }
@@ -1404,7 +1427,7 @@
     // ---- INIT ----
     setupAccordion();
     refreshAll();
-    setInterval(refreshAll, 15000);
+    setInterval(refreshAll, 30000);
 
     if (refreshBtn) {
         refreshBtn.addEventListener("click", async () => {
