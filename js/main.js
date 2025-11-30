@@ -14,7 +14,6 @@ import {
 } from "./apiEmt.js";
 
 import {
-    renderStop,
     renderNearbyStops,
     createDynamicStopAccordion,
     filterMyStopsByLine
