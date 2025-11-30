@@ -44,3 +44,51 @@ export let nearbyLineFilter = "";
 export function setNearbyLineFilter(line) {
     nearbyLineFilter = line;
 }
+
+if (nearbyApplyBtn && nearbyLineInput) {
+    nearbyApplyBtn.addEventListener("click", () => {
+        const raw = nearbyLineInput.value.trim();
+
+        if (!raw) {
+            setNearbyLineFilter("");                      // 👈 usar setter
+            if (nearbyFilterMsgEl) nearbyFilterMsgEl.textContent = "";
+            renderNearbyStops(nearbyStopsCache);
+            return;
+        }
+
+        const normalized = normalizeLine(raw);
+        setNearbyLineFilter(normalized);                  // 👈 usar setter
+
+        renderNearbyStops(nearbyStopsCache).then(() => {
+            let anyMatch = false;
+
+            document
+              .querySelectorAll("#nearby-accordion .bus-list")
+              .forEach(list => {
+                  if (!list.children.length) return;
+                  const first = list.children[0];
+                  if (!first.classList.contains("empty")) {
+                      anyMatch = true;
+                  }
+              });
+
+            if (!anyMatch) {
+                if (nearbyFilterMsgEl) {
+                    nearbyFilterMsgEl.textContent =
+                        "No hay paradas cercanas con buses de esa línea ahora mismo (en las paradas cargadas).";
+                }
+            } else {
+                if (nearbyFilterMsgEl) nearbyFilterMsgEl.textContent = "";
+            }
+        });
+    });
+}
+
+if (nearbyClearBtn && nearbyLineInput) {
+    nearbyClearBtn.addEventListener("click", () => {
+        nearbyLineInput.value = "";
+        setNearbyLineFilter("");
+        if (nearbyFilterMsgEl) nearbyFilterMsgEl.textContent = "";
+        renderNearbyStops(nearbyStopsCache);
+    });
+}
