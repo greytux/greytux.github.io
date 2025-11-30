@@ -138,6 +138,51 @@ if (myLineInput) {
     });
 }
 
+if (nearbyApplyBtn && nearbyLineInput) {
+    nearbyApplyBtn.addEventListener("click", () => {
+        const raw = nearbyLineInput.value.trim();
+
+        if (!raw) {
+            nearbyLineFilter = "";
+            if (nearbyFilterMsgEl) nearbyFilterMsgEl.textContent = "";
+            renderNearbyStops(nearbyStopsCache);
+            return;
+        }
+
+        nearbyLineFilter = normalizeLine(raw);
+
+        renderNearbyStops(nearbyStopsCache).then(() => {
+            // Comprobar si alguna parada (cargada) tiene buses
+            let anyMatch = false;
+            document.querySelectorAll("#nearby-accordion .bus-list").forEach(list => {
+                if (!list.children.length) return;
+                const first = list.children[0];
+                if (!first.classList.contains("empty")) {
+                    anyMatch = true;
+                }
+            });
+
+            if (!anyMatch) {
+                if (nearbyFilterMsgEl) {
+                    nearbyFilterMsgEl.textContent =
+                        "No hay paradas cercanas con buses de esa línea ahora mismo (en las paradas cargadas).";
+                }
+            } else {
+                if (nearbyFilterMsgEl) nearbyFilterMsgEl.textContent = "";
+            }
+        });
+    });
+}
+
+if (nearbyClearBtn && nearbyLineInput) {
+    nearbyClearBtn.addEventListener("click", () => {
+        nearbyLineInput.value = "";
+        nearbyLineFilter = "";
+        if (nearbyFilterMsgEl) nearbyFilterMsgEl.textContent = "";
+        renderNearbyStops(nearbyStopsCache);
+    });
+}
+
 // Init
 setupAccordion();
 refreshAll();
