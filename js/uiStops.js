@@ -471,3 +471,16 @@ export async function createDynamicStopAccordion(stopId) {
         filterMyStopsByLine(myLineInput.value.trim());
     }
 }
+
+export function setupAccordionListeners(root = document) {
+    const items = root.querySelectorAll(".accordion-item");
+    items.forEach(item => {
+        const header = item.querySelector(".accordion-header");
+        if (!header) return;
+
+        // Usamos onclick para no acumular múltiples listeners si lo llamas varias veces
+        header.onclick = () => {
+            item.classList.toggle("open");
+        };
+    });
+}
