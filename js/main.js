@@ -29,6 +29,9 @@ import {
 
 import { setupSlider } from "./slider.js";
 
+const addStopForm = document.getElementById("add-stop-form");
+const stopIdInput = document.getElementById("stop-id-input");
+
 // DOM
 const globalStatusEl = document.getElementById("last-update-global");
 const nearbyStatusEl = document.getElementById("nearby-status");
@@ -116,6 +119,22 @@ document.getElementById("add-stop-form").onsubmit = async e => {
     await createDynamicStopAccordion(id, fetchStopCoords, normalizeLinePublic);
     stopIdInput.value = "";
 };
+
+addStopForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const raw = stopIdInput.value.trim();
+
+    if (!raw) return;
+
+    const stopId = parseInt(raw, 10);
+    if (Number.isNaN(stopId) || stopId <= 0) {
+        alert("Introduce un número de parada válido.");
+        return;
+    }
+
+    await createDynamicStopAccordion(stopId, normalizeLine);
+    stopIdInput.value = "";
+});
 
 // INIT
 setupAccordionListeners();
