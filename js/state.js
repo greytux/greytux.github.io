@@ -1,49 +1,45 @@
 // state.js
-
-// URLs base de la API
+// Estado global simple compartido entre módulos
 export const BASE_URL_V2 = "https://openapi.emtmadrid.es/v2";
 export const BASE_URL_V1 = "https://openapi.emtmadrid.es/v1";
 
-// Paradas favoritas / fijas + las dinámicas que vayamos añadiendo
+// Paradas favoritas + dinámicas
 export const STOPS = [
     { id: 3224, label: "Herrera Oria - Labastida (TRABAJO) - Parada 3224" },
-    {
-        id: 2677,
-        label: "Fuente de la Carra hacia el centro - Parada 2677",
-        filterLines: ["66", "137"]
-    }
+    { id: 2677, label: "Fuente de la Carra hacia el centro - Parada 2677", filterLines: ["66", "137"] }
 ];
 
-// Coordenadas y líneas de cada parada
+// Coordenadas y líneas por parada
 export const STOP_COORDS = {};
-export const STOP_LINES = {};
+export const STOP_LINES  = {};
 
-// Cache de paradas cercanas
-export let nearbyStopsCache = [];
-export function setNearbyStopsCache(val) {
-    nearbyStopsCache = Array.isArray(val) ? val : [];
-}
-
-// Ubicación del usuario
+// Ubicación usuario
 export let userLocation = null;
 export function setUserLocation(loc) {
     userLocation = loc;
 }
 
-// Filtro por línea (paradas cercanas)
+// Cache paradas cercanas (respuesta cruda de EMT)
+export let nearbyStopsCache = [];
+export function setNearbyStopsCache(stops) {
+    nearbyStopsCache = Array.isArray(stops) ? stops : [];
+}
+
+// Filtro actual de línea para paradas cercanas
 export let nearbyLineFilter = "";
 export function setNearbyLineFilter(line) {
     nearbyLineFilter = line || "";
 }
 
-// Cooldown de la API EMT
-export const API_COOLDOWN_MINUTES = 5;
-export let apiCooldownUntil = 0;
+// Cooldown API EMT
+export const API_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutos
+let apiCooldownUntil = 0;
+
+export function activateApiCooldown() {
+    apiCooldownUntil = Date.now() + API_COOLDOWN_MS;
+    console.warn("API cooldown activado hasta", new Date(apiCooldownUntil).toISOString());
+}
 
 export function isApiInCooldown() {
     return Date.now() < apiCooldownUntil;
-}
-
-export function activateApiCooldown() {
-    apiCooldownUntil = Date.now() + API_COOLDOWN_MINUTES * 60 * 1000;
 }
