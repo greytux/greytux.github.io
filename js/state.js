@@ -19,6 +19,10 @@ export function setApiCooldownUntil(ts) {
     apiCooldownUntil = ts;
 }
 
+export function isApiCooldownActive() {
+    return Date.now() < apiCooldownUntil;
+}
+
 // Paradas favoritas / dinámicas
 export const STOPS = [
     { id: 3224, label: "Herrera Oria - Labastida (TRABAJO) - Parada 3224" },
@@ -50,14 +54,14 @@ if (nearbyApplyBtn && nearbyLineInput) {
         const raw = nearbyLineInput.value.trim();
 
         if (!raw) {
-            setNearbyLineFilter("");                      // 👈 usar setter
+            setNearbyLineFilter("");
             if (nearbyFilterMsgEl) nearbyFilterMsgEl.textContent = "";
             renderNearbyStops(nearbyStopsCache);
             return;
         }
 
         const normalized = normalizeLine(raw);
-        setNearbyLineFilter(normalized);                  // 👈 usar setter
+        setNearbyLineFilter(normalized);
 
         renderNearbyStops(nearbyStopsCache).then(() => {
             let anyMatch = false;

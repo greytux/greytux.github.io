@@ -51,5 +51,5 @@ export function initSlider() {
         });
     }
 
-    return { getCurrentIndex: () => currentSlideIndex };
+    return { setSlide, getCurrentIndex: () => currentSlideIndex };
 }

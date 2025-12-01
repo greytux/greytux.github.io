@@ -1,5 +1,6 @@
 // js/apiEmt.js
 import {
+    API_COOLDOWN_MS,
     BASE_URL_V1, BASE_URL_V2,
     EMT_USER, EMT_PASS,
     accessToken, setAccessToken,
@@ -12,10 +13,11 @@ export function isInApiCooldown() {
     return Date.now() < apiCooldownUntil;
 }
 
+// Cuando la API devuelve "Limit use API reached"
 export function activateApiCooldown() {
-    const until = Date.now() + (10 * 60 * 1000);
+    const until = Date.now() + API_COOLDOWN_MS;
     setApiCooldownUntil(until);
-    console.warn("API cooldown activado hasta:", new Date(until).toLocaleTimeString("es-ES"));
+    console.warn("API cooldown activado hasta:", new Date(until).toLocaleTimeString());
 }
 
 export function isLimitError(json) {
