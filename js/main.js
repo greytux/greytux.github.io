@@ -268,8 +268,6 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // --- Inicialización de acordeones y primer refresco ---
-
     // Engancha los clics de los acordeones que ya vienen en el HTML
     setupAccordionListeners();
 

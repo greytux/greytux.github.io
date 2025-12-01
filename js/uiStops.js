@@ -13,6 +13,9 @@ import {
     isInApiCooldown
 } from "./apiEmt.js";
 
+const dynamicStopsContainer = document.getElementById("dynamic-stops");
+const myLineInput = document.getElementById("my-line-input"); // si lo usas aquí también
+
 function normalizeLine(l) {
     if (l == null) return "";
     return String(l).trim().replace(/^0+/, "");
@@ -400,7 +403,6 @@ export function setupAccordion() {
     });
 }
 
-// ---- PARADAS DINÁMICAS ----
 export async function createDynamicStopAccordion(stopId) {
     if (STOPS.some(s => s.id === stopId)) {
         const existing = document.querySelector(
