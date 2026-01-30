@@ -1,20 +1,18 @@
-// uiStops.js
 import {
     STOPS,
     STOP_COORDS,
     STOP_LINES,
     nearbyLineFilter,
-    userLocation,
+    userLocation
 } from "./state.js";
-import { getArrivals } from "./apiEmt.js";
 
-// Elementos del DOM específicos de paradas
-const dynamicStopsContainer = document.getElementById("dynamic-stops");
-const nearbyAccordionEl = document.getElementById("nearby-accordion");
-const myLineInput = document.getElementById("my-line-input");
+import {
+    getArrivals,
+    fetchStopCoords
+} from "./apiEmt.js";
 
-// Enlaces "Ver ubicación" + "Ver ruta andando"
-export function updateLocationLink(stopId) {
+// --- Enlace "Ver ubicación" + "Ver ruta andando" ---
+function updateLocationLink(stopId) {
     const container = document.getElementById(`location-${stopId}`);
     if (!container) return;
 
@@ -54,7 +52,7 @@ export function updateLocationLink(stopId) {
     } else {
         html += `
       <span style="margin-left: 6px; color: #9ca3af;">
-          (activa la geolocalización para ver la ruta andando)
+        (activa la geolocalización para ver la ruta andando)
       </span>
     `;
     }
@@ -62,7 +60,7 @@ export function updateLocationLink(stopId) {
     container.innerHTML = html;
 }
 
-// Render de una parada (lista de llegadas)
+// ---- RENDER PARADA INDIVIDUAL ----
 export function renderStop(stopConfig, arrivals) {
     const { id, filterLines } = stopConfig;
 
@@ -80,13 +78,13 @@ export function renderStop(stopConfig, arrivals) {
 
     let filtered = arrivals;
     if (filterLines && filterLines.length) {
-        filtered = arrivals.filter((a) =>
+        filtered = arrivals.filter(a =>
             filterLines.includes(String(a.line).trim())
         );
     }
 
     let nextBusMinutes = null;
-    filtered.forEach((arr) => {
+    filtered.forEach(arr => {
         if (arr.estimateArrive != null) {
             const m = Math.round(arr.estimateArrive / 60);
             if (nextBusMinutes == null || m < nextBusMinutes) {
@@ -125,16 +123,13 @@ export function renderStop(stopConfig, arrivals) {
     if (statusText) statusText.textContent = "Datos en tiempo real.";
 
     filtered
-        .sort(
-            (a, b) => (a.estimateArrive || 0) - (b.estimateArrive || 0)
-        )
-        .forEach((arr) => {
+        .sort((a, b) => (a.estimateArrive || 0) - (b.estimateArrive || 0))
+        .forEach(arr => {
             const li = document.createElement("li");
 
-            const minutes =
-                arr.estimateArrive != null
-                    ? Math.round(arr.estimateArrive / 60)
-                    : null;
+            const minutes = arr.estimateArrive != null
+                ? Math.round(arr.estimateArrive / 60)
+                : null;
 
             let className = "bus-item";
             if (minutes != null) {
@@ -158,9 +153,7 @@ export function renderStop(stopConfig, arrivals) {
             textBlock.innerHTML = `
         <div class="bus-main">${arr.destination || "Destino no disponible"}</div>
         <div class="bus-sub">
-          Distancia aprox bus-parada: ${
-                arr.DistanceBus != null ? arr.DistanceBus + " m" : "-"
-            }
+          Distancia aprox bus-parada: ${arr.DistanceBus != null ? arr.DistanceBus + " m" : "-"}
         </div>
       `;
 
@@ -184,10 +177,15 @@ export function renderStop(stopConfig, arrivals) {
             const label = document.createElement("div");
             label.className = "pill-label";
             if (minutes != null) {
-                if (minutes < 10) label.textContent = "Muy justo";
-                else if (minutes < 15) label.textContent = "Justo";
-                else if (minutes < 20) label.textContent = "Tienes margen";
-                else label.textContent = "Tiempo de sobra";
+                if (minutes < 10) {
+                    label.textContent = "Muy justo";
+                } else if (minutes < 15) {
+                    label.textContent = "Justo";
+                } else if (minutes < 20) {
+                    label.textContent = "Tienes margen";
+                } else {
+                    label.textContent = "Tiempo de sobra";
+                }
             } else {
                 label.textContent = "Sin estimación precisa";
             }
@@ -201,9 +199,11 @@ export function renderStop(stopConfig, arrivals) {
         });
 }
 
+// --- Refrescar una parada individual ---
 export async function refreshStop(stopConfig) {
     const statusWrapper = document.getElementById(`status-${stopConfig.id}`);
     const statusText = statusWrapper?.querySelector("span:nth-child(2)");
+
     if (statusWrapper && statusText) {
         statusWrapper.classList.remove("error");
         statusText.textContent = "Actualizando…";
@@ -214,20 +214,27 @@ export async function refreshStop(stopConfig) {
         renderStop(stopConfig, arrivals);
     } catch (err) {
         console.error(err);
-        if (statusWrapper && statusText) {
-            statusWrapper.classList.add("error");
+        if (!statusWrapper || !statusText) return;
+
+        statusWrapper.classList.add("error");
+
+        if (err.message === "API_COOLDOWN" || err.message === "API_LIMIT_REACHED") {
+            statusText.textContent =
+                "Límite de uso de la API EMT. Espera unos minutos.";
+        } else {
             statusText.textContent = "Error: " + err.message;
         }
     }
 }
 
-// Paradas cercanas como acordeones
+// --- Renderizado de paradas cercanas como acordeones ---
 export async function renderNearbyStops(stops) {
+    const nearbyAccordionEl = document.getElementById("nearby-accordion");
     if (!nearbyAccordionEl) return;
 
     const prevOpenIds = new Set();
     const prevItems = nearbyAccordionEl.querySelectorAll(".accordion-item.open");
-    prevItems.forEach((item) => {
+    prevItems.forEach(item => {
         const id = item.dataset.stopId;
         if (id) prevOpenIds.add(String(id));
     });
@@ -242,10 +249,10 @@ export async function renderNearbyStops(stops) {
         return;
     }
 
-    const baseIds = new Set(STOPS.map((s) => String(s.id)));
+    const baseIds = new Set(STOPS.map(s => String(s.id)));
 
     const filtered = stops
-        .map((stop) => {
+        .map(stop => {
             const stopId =
                 stop.stopId ??
                 stop.IdStop ??
@@ -255,13 +262,12 @@ export async function renderNearbyStops(stops) {
                 null;
             return { raw: stop, stopId };
         })
-        .filter((s) => s.stopId != null && !baseIds.has(String(s.stopId)));
+        .filter(s => s.stopId != null && !baseIds.has(String(s.stopId)));
 
     if (!filtered.length) {
         const div = document.createElement("div");
         div.className = "empty";
-        div.textContent =
-            "Las paradas cercanas ya están entre tus paradas favoritas o añadidas.";
+        div.textContent = "Las paradas cercanas ya están entre tus paradas favoritas o añadidas.";
         nearbyAccordionEl.appendChild(div);
         return;
     }
@@ -272,7 +278,10 @@ export async function renderNearbyStops(stops) {
     for (const { raw: stop, stopId } of topN) {
         const idNum = parseInt(stopId, 10);
         const name =
-            stop.name ?? stop.stopName ?? stop.StopName ?? `Parada ${idNum}`;
+            stop.name ??
+            stop.stopName ??
+            stop.StopName ??
+            `Parada ${idNum}`;
 
         if (stop.geometry && Array.isArray(stop.geometry.coordinates)) {
             const coords = stop.geometry.coordinates;
@@ -327,36 +336,24 @@ export async function renderNearbyStops(stops) {
         stopConfigs.push(cfg);
     }
 
-    await Promise.all(stopConfigs.map((cfg) => refreshStop(cfg)));
+    await Promise.all(stopConfigs.map(cfg => refreshStop(cfg)));
 }
 
-// Filtro "Mis paradas" por línea
-export function filterMyStopsByLine(filterVal, normalizeFn) {
-    const normalized = filterVal ? normalizeFn(filterVal) : "";
-    const items = dynamicStopsContainer.querySelectorAll(".accordion-item");
-
-    items.forEach((item) => {
-        const stopId = parseInt(item.dataset.stopId, 10);
-        if (!normalized) {
-            item.style.display = "";
-            return;
-        }
-        const lines = STOP_LINES[stopId] || [];
-        if (lines.some((l) => l === normalized)) {
-            item.style.display = "";
-        } else {
-            item.style.display = "none";
-        }
+// ---- ACCORDIÓN ESTÁTICO (favoritas ya existentes en HTML) ----
+export function setupAccordionListeners() {
+    const items = document.querySelectorAll(".accordion-item");
+    items.forEach(item => {
+        const header = item.querySelector(".accordion-header");
+        if (!header) return;
+        header.addEventListener("click", () => {
+            item.classList.toggle("open");
+        });
     });
 }
 
-// Crear parada dinámica
-export async function createDynamicStopAccordion(
-    stopId,
-    fetchStopCoordsFn,
-    normalizeFn
-) {
-    if (STOPS.some((s) => s.id === stopId)) {
+// ---- PARADAS DINÁMICAS ("Mis paradas") ----
+export async function createDynamicStopAccordion(stopId, normalizeLineFn) {
+    if (STOPS.some(s => s.id === stopId)) {
         const existing = document.querySelector(
             `.accordion-item[data-stop-id="${stopId}"]`
         );
@@ -382,10 +379,13 @@ export async function createDynamicStopAccordion(
     STOPS.push(stopConfig);
 
     try {
-        await fetchStopCoordsFn(stopId);
+        await fetchStopCoords(stopId);
     } catch (e) {
         console.warn("No se pudieron obtener coords para la parada dinámica", stopId);
     }
+
+    const dynamicStopsContainer = document.getElementById("dynamic-stops");
+    if (!dynamicStopsContainer) return;
 
     const article = document.createElement("article");
     article.className = "accordion-item open";
@@ -421,19 +421,32 @@ export async function createDynamicStopAccordion(
     updateLocationLink(stopId);
     renderStop(stopConfig, arrivals);
 
+    // Reaplicar filtro actual si hay
+    const myLineInput = document.getElementById("my-line-input");
     if (myLineInput && myLineInput.value.trim()) {
-        filterMyStopsByLine(myLineInput.value.trim(), normalizeFn);
+        filterMyStopsByLine(myLineInput.value.trim(), normalizeLineFn);
     }
 }
 
-// Setup acordeones iniciales
-export function setupAccordionListeners() {
-    const items = document.querySelectorAll(".accordion-item");
-    items.forEach((item) => {
-        const header = item.querySelector(".accordion-header");
-        if (!header) return;
-        header.addEventListener("click", () => {
-            item.classList.toggle("open");
-        });
+// ---- Filtro "mis paradas" ----
+export function filterMyStopsByLine(filterVal, normalizeLineFn) {
+    const normalized = filterVal ? normalizeLineFn(filterVal) : "";
+    const dynamicStopsContainer = document.getElementById("dynamic-stops");
+    if (!dynamicStopsContainer) return;
+
+    const items = dynamicStopsContainer.querySelectorAll(".accordion-item");
+
+    items.forEach(item => {
+        const stopId = parseInt(item.dataset.stopId, 10);
+        if (!normalized) {
+            item.style.display = "";
+            return;
+        }
+        const lines = STOP_LINES[stopId] || [];
+        if (lines.some(l => l === normalized)) {
+            item.style.display = "";
+        } else {
+            item.style.display = "none";
+        }
     });
 }
