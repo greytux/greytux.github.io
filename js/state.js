@@ -6,7 +6,8 @@ export const BASE_URL_V1 = "https://openapi.emtmadrid.es/v1";
 // Paradas favoritas + dinámicas
 export const STOPS = [
     { id: 3224, label: "Herrera Oria - Labastida (TRABAJO) - Parada 3224" },
-    { id: 2677, label: "Fuente de la Carra hacia el centro - Parada 2677", filterLines: ["66", "137"] }
+    { id: 2677, label: "Fuente de la Carra hacia el centro - Parada 2677", filterLines: ["66", "137"] },
+    { id: 93, label: "Herrera Horia hacia Moncloa - Parada 93", filterLines: ["83"] }
 ];
 
 // Coordenadas y líneas por parada
