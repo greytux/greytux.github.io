@@ -133,9 +133,9 @@ export function renderStop(stopConfig, arrivals) {
 
             let className = "bus-item";
             if (minutes != null) {
-                if (minutes < 15) {
+                if (minutes < 3) {
                     className += " urgent";
-                } else if (minutes < 20) {
+                } else if (minutes < 10) {
                     className += " soon";
                 }
             }
