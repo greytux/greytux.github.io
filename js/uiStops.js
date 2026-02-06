@@ -135,7 +135,7 @@ export function renderStop(stopConfig, arrivals) {
             if (minutes != null) {
                 if (minutes < 3) {
                     className += " urgent";
-                } else if (minutes < 10) {
+                } else if (minutes <= 10) {
                     className += " soon";
                 }
             }
