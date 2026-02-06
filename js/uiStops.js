@@ -177,11 +177,11 @@ export function renderStop(stopConfig, arrivals) {
             const label = document.createElement("div");
             label.className = "pill-label";
             if (minutes != null) {
-                if (minutes < 10) {
+                if (minutes <= 2) {
                     label.textContent = "Muy justo";
-                } else if (minutes < 15) {
+                } else if (minutes <= 5) {
                     label.textContent = "Justo";
-                } else if (minutes < 20) {
+                } else if (minutes <= 10) {
                     label.textContent = "Tienes margen";
                 } else {
                     label.textContent = "Tiempo de sobra";
