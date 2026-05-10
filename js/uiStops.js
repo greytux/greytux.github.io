@@ -16,6 +16,13 @@ import {
     fetchStopCoords
 } from "./apiEmt.js";
 
+import { toast, confirmDialog } from "./toast.js";
+
+import {
+    evaluateAlarmsForStop,
+    renderAlarmsForStop
+} from "./alarms.js";
+
 // --- Enlace "Ver ubicación" + "Ver ruta andando" ---
 function updateLocationLink(stopId) {
     const container = document.getElementById(`location-${stopId}`);
@@ -68,6 +75,11 @@ function updateLocationLink(stopId) {
 // ---- RENDER PARADA INDIVIDUAL ----
 export function renderStop(stopConfig, arrivals) {
     const { id, filterLines } = stopConfig;
+
+    // Evaluar alarmas siempre, antes de filtrar por filterLines (la alarma puede
+    // ser de una línea distinta a las filtradas en la favorita).
+    evaluateAlarmsForStop(id, arrivals);
+    renderAlarmsForStop(id);
 
     const listEl = document.getElementById(`buses-${id}`);
     const statusWrapper = document.getElementById(`status-${id}`);
@@ -266,6 +278,7 @@ function buildStopAccordionElement(stopConfig, opts = {}) {
           <span>Cargando…</span>
         </div>
         <ul class="bus-list" id="buses-${id}"></ul>
+        <div class="alarms-section" id="alarms-${id}"></div>
       </div>
     `;
 
@@ -372,10 +385,15 @@ export async function renderFavorites() {
                     icon: "✕",
                     title: "Quitar de favoritas",
                     danger: true,
-                    onClick: () => {
-                        if (!confirm(`¿Quitar la parada ${fav.id} de favoritas?`)) return;
+                    onClick: async () => {
+                        const ok = await confirmDialog(
+                            `¿Quitar la parada ${fav.id} de favoritas?`,
+                            { okText: "Quitar", danger: true }
+                        );
+                        if (!ok) return;
                         removeFavorite(fav.id);
-                        renderFavorites();
+                        await renderFavorites();
+                        toast(`Parada ${fav.id} quitada de favoritas.`, { type: "success" });
                     }
                 }
             ]
@@ -383,6 +401,7 @@ export async function renderFavorites() {
 
         container.appendChild(article);
         updateLocationLink(fav.id);
+        renderAlarmsForStop(fav.id);
     });
 }
 
@@ -393,7 +412,7 @@ async function refreshFavorites() {
 // --- Añadir favorita desde formulario ---
 export async function handleAddFavorite(stopId, filterLines) {
     if (FAVORITES.some(s => s.id === stopId)) {
-        alert(`La parada ${stopId} ya está en favoritas.`);
+        toast(`La parada ${stopId} ya está en favoritas.`, { type: "warn" });
         return false;
     }
 
@@ -402,8 +421,9 @@ export async function handleAddFavorite(stopId, filterLines) {
         arrivals = await getArrivals(stopId);
     } catch (err) {
         console.error(err);
-        alert(
-            `No se ha podido obtener información para la parada ${stopId}. Comprueba que el número es correcto.`
+        toast(
+            `No se ha podido obtener información para la parada ${stopId}. Comprueba el número.`,
+            { type: "error", duration: 5000 }
         );
         return false;
     }
@@ -516,6 +536,7 @@ export async function renderNearbyStops(stops) {
 
         nearbyAccordionEl.appendChild(article);
         updateLocationLink(idNum);
+        renderAlarmsForStop(idNum);
         stopConfigs.push(cfg);
     }
 
@@ -546,8 +567,9 @@ export async function createDynamicStopAccordion(stopId, normalizeLineFn) {
         arrivals = await getArrivals(stopId);
     } catch (err) {
         console.error(err);
-        alert(
-            `No se ha podido obtener información para la parada ${stopId}. Comprueba que el número es correcto.`
+        toast(
+            `No se ha podido obtener información para la parada ${stopId}. Comprueba el número.`,
+            { type: "error", duration: 5000 }
         );
         return;
     }

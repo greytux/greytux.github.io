@@ -127,6 +127,117 @@ export function setNearbyLineFilter(line) {
     nearbyLineFilter = line || "";
 }
 
+// ---- Alarmas (avísame cuando línea X esté a Y min en parada Z) ----
+const ALARMS_STORAGE_KEY = "greytux:alarms:v1";
+
+function sanitizeAlarm(a) {
+    if (!a) return null;
+    const stopId = Number(a.stopId);
+    const threshold = Number(a.threshold);
+    const line = a.line != null ? String(a.line).trim().replace(/^0+/, "") : "";
+    if (!Number.isFinite(stopId) || !line || !Number.isFinite(threshold) || threshold < 0) {
+        return null;
+    }
+    const id = typeof a.id === "string" && a.id ? a.id : null;
+    return { id, stopId, line, threshold };
+}
+
+function loadAlarmsFromStorage() {
+    try {
+        const raw = localStorage.getItem(ALARMS_STORAGE_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return [];
+        return parsed
+            .map(sanitizeAlarm)
+            .filter(Boolean)
+            .map(a => ({ ...a, id: a.id || newAlarmId() }));
+    } catch {
+        return [];
+    }
+}
+
+function newAlarmId() {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+        return crypto.randomUUID();
+    }
+    return `a_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export const ALARMS = loadAlarmsFromStorage();
+
+function persistAlarms() {
+    try {
+        localStorage.setItem(ALARMS_STORAGE_KEY, JSON.stringify(ALARMS));
+    } catch (e) {
+        console.warn("No se pudo guardar alarmas en localStorage", e);
+    }
+}
+
+export function addAlarm(input) {
+    const clean = sanitizeAlarm(input);
+    if (!clean) return null;
+    if (ALARMS.some(a =>
+        a.stopId === clean.stopId &&
+        a.line === clean.line &&
+        a.threshold === clean.threshold
+    )) {
+        return null;
+    }
+    clean.id = newAlarmId();
+    ALARMS.push(clean);
+    persistAlarms();
+    return clean;
+}
+
+export function removeAlarm(id) {
+    const i = ALARMS.findIndex(a => a.id === id);
+    if (i === -1) return false;
+    ALARMS.splice(i, 1);
+    persistAlarms();
+    return true;
+}
+
+export function getAlarmsForStop(stopId) {
+    return ALARMS.filter(a => a.stopId === stopId);
+}
+
+// Persistencia de accessToken EMT
+const TOKEN_STORAGE_KEY = "greytux:emt-token:v1";
+
+export function getStoredToken() {
+    try {
+        const raw = localStorage.getItem(TOKEN_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed.token !== "string") return null;
+        if (typeof parsed.expiresAt === "number" && parsed.expiresAt < Date.now()) {
+            return null;
+        }
+        return parsed.token;
+    } catch {
+        return null;
+    }
+}
+
+export function setStoredToken(token, expiresAt) {
+    if (typeof token !== "string" || !token) return;
+    try {
+        localStorage.setItem(
+            TOKEN_STORAGE_KEY,
+            JSON.stringify({ token, expiresAt })
+        );
+    } catch (e) {
+        console.warn("No se pudo guardar el token EMT", e);
+    }
+}
+
+export function clearStoredToken() {
+    try {
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+    } catch {}
+}
+
 // Cooldown API EMT
 export const API_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutos
 let apiCooldownUntil = 0;

@@ -25,6 +25,10 @@ import {
 
 import { initSlider } from "./slider.js";
 
+import { toast } from "./toast.js";
+
+import { hasAnyAlarms, getAlarmedStopIds } from "./alarms.js";
+
 // Util para normalizar número de línea (quita ceros a la izquierda)
 function normalizeLine(l) {
     if (l == null) return "";
@@ -154,7 +158,7 @@ if (addFavoriteForm && favIdInput) {
 
         const stopId = parseInt(raw, 10);
         if (Number.isNaN(stopId) || stopId <= 0) {
-            alert("Introduce un número de parada válido.");
+            toast("Introduce un número de parada válido.", { type: "error" });
             return;
         }
 
@@ -180,7 +184,7 @@ if (addStopForm && stopIdInput) {
 
         const stopId = parseInt(raw, 10);
         if (Number.isNaN(stopId) || stopId <= 0) {
-            alert("Introduce un número de parada válido.");
+            toast("Introduce un número de parada válido.", { type: "error" });
             return;
         }
 
@@ -246,9 +250,26 @@ if (nearbyClearBtn && nearbyLineInput) {
 const REFRESH_MS = 45000;
 let refreshTimer = null;
 
+// Tick "ligero": solo paradas con alarma. Sin geolocalización ni cercanas.
+async function refreshAlarmedOnly() {
+    const ids = getAlarmedStopIds();
+    if (!ids.length) return;
+    if (isApiInCooldown()) return;
+    await Promise.all(ids.map(id => refreshStop({ id })));
+}
+
+// Tick decidido por la visibilidad de la pestaña
+async function pollingTick() {
+    if (document.visibilityState === "visible") {
+        await refreshAll();
+    } else if (hasAnyAlarms()) {
+        await refreshAlarmedOnly();
+    }
+}
+
 function startPolling() {
     if (refreshTimer != null) return;
-    refreshTimer = setInterval(refreshAll, REFRESH_MS);
+    refreshTimer = setInterval(pollingTick, REFRESH_MS);
 }
 
 function stopPolling() {
@@ -261,9 +282,11 @@ document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
         refreshAll();
         startPolling();
-    } else {
+    } else if (!hasAnyAlarms()) {
         stopPolling();
     }
+    // Si hay alarmas activas mantenemos el polling también con la pestaña oculta
+    // pero solo refresca paradas con alarma (refreshAlarmedOnly).
 });
 
 refreshAll();

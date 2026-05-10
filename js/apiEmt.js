@@ -4,14 +4,45 @@ import {
     STOP_COORDS,
     STOP_LINES,
     activateApiCooldown,
-    isApiInCooldown
+    isApiInCooldown,
+    getStoredToken,
+    setStoredToken,
+    clearStoredToken
 } from "./state.js";
 
 // TODO -> ocultar
 const USER = "diegojesus.escudero@gmail.com";
 const PASS = "Linares251291?";
 
-let accessToken = null;
+// Si ya tenemos un token válido en localStorage lo reutilizamos:
+// así evitamos hacer login en cada recarga.
+let accessToken = getStoredToken();
+
+// Lifespan por defecto si la API no nos dice nada (25 min, conservador).
+const DEFAULT_TOKEN_LIFESPAN_MS = 25 * 60 * 1000;
+
+function deriveTokenExpiry(data0) {
+    if (!data0) return Date.now() + DEFAULT_TOKEN_LIFESPAN_MS;
+
+    if (
+        data0.tokenDteExpiration &&
+        typeof data0.tokenDteExpiration === "object" &&
+        Number.isFinite(data0.tokenDteExpiration.$date)
+    ) {
+        return Number(data0.tokenDteExpiration.$date);
+    }
+
+    if (Number.isFinite(data0.tokenSecExpiration)) {
+        return Date.now() + data0.tokenSecExpiration * 1000;
+    }
+
+    return Date.now() + DEFAULT_TOKEN_LIFESPAN_MS;
+}
+
+function invalidateToken() {
+    accessToken = null;
+    clearStoredToken();
+}
 
 function isLimitErrorJson(json) {
     if (!json) return false;
@@ -49,10 +80,17 @@ async function login() {
     }
 
     if (json.code !== "00" && json.code !== "01") {
+        invalidateToken();
         throw new Error("Login EMT falló: " + (json.description || json.code));
     }
 
-    accessToken = json.data[0].accessToken;
+    const data0 = json.data && json.data[0];
+    accessToken = data0 && data0.accessToken;
+    if (!accessToken) {
+        invalidateToken();
+        throw new Error("Login EMT no devolvió accessToken");
+    }
+    setStoredToken(accessToken, deriveTokenExpiry(data0));
     return accessToken;
 }
 
@@ -96,7 +134,7 @@ export async function getArrivals(stopId) {
 
     if (json.code !== "00") {
         if (json.code === "01" || json.code === "02") {
-            accessToken = null;
+            invalidateToken();
             return getArrivals(stopId);
         }
         throw new Error("Error API arrives (" + stopId + "): " + (json.description || json.code));
@@ -263,7 +301,7 @@ export async function getNearbyStops() {
 
     if (json.code !== "00") {
         if (json.code === "01" || json.code === "02") {
-            accessToken = null;
+            invalidateToken();
             return getNearbyStops();
         }
         throw new Error("Error API paradas cercanas: " + (json.description || json.code));
