@@ -18,7 +18,9 @@ import {
     refreshStop,
     renderNearbyStops,
     createDynamicStopAccordion,
-    filterMyStopsByLine
+    filterMyStopsByLine,
+    renderFavorites,
+    handleAddFavorite
 } from "./uiStops.js";
 
 import { initSlider } from "./slider.js";
@@ -35,6 +37,10 @@ const refreshBtn      = document.getElementById("refresh-now");
 
 const addStopForm     = document.getElementById("add-stop-form");
 const stopIdInput     = document.getElementById("stop-id-input");
+
+const addFavoriteForm = document.getElementById("add-favorite-form");
+const favIdInput      = document.getElementById("fav-id-input");
+const favLinesInput   = document.getElementById("fav-lines-input");
 
 const nearbyStatusEl  = document.getElementById("nearby-status");
 const nearbyLineInput = document.getElementById("nearby-line-input");
@@ -123,7 +129,8 @@ async function refreshAll() {
 }
 
 // ---- Listeners básicos ----
-setupAccordionListeners();   // Acordeones estáticos de favoritas
+setupAccordionListeners();   // No-op (compat); favoritas dinámicas se montan abajo
+renderFavorites();           // Pinta favoritas desde localStorage
 initSlider();                // Tabs + swipe
 
 // Botón refresh global
@@ -134,6 +141,32 @@ if (refreshBtn) {
             await refreshAll();
         } finally {
             setTimeout(() => refreshBtn.classList.remove("refresh-spin"), 600);
+        }
+    });
+}
+
+// Formulario "Favoritas" (añadir favorita persistida)
+if (addFavoriteForm && favIdInput) {
+    addFavoriteForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const raw = favIdInput.value.trim();
+        if (!raw) return;
+
+        const stopId = parseInt(raw, 10);
+        if (Number.isNaN(stopId) || stopId <= 0) {
+            alert("Introduce un número de parada válido.");
+            return;
+        }
+
+        const linesRaw = favLinesInput ? favLinesInput.value.trim() : "";
+        const filterLines = linesRaw
+            ? linesRaw.split(",").map(l => normalizeLine(l)).filter(Boolean)
+            : null;
+
+        const ok = await handleAddFavorite(stopId, filterLines);
+        if (ok) {
+            favIdInput.value = "";
+            if (favLinesInput) favLinesInput.value = "";
         }
     });
 }
@@ -210,5 +243,39 @@ if (nearbyClearBtn && nearbyLineInput) {
 }
 
 // Lanzar la primera actualización y el intervalo
+const REFRESH_MS = 45000;
+let refreshTimer = null;
+
+function startPolling() {
+    if (refreshTimer != null) return;
+    refreshTimer = setInterval(refreshAll, REFRESH_MS);
+}
+
+function stopPolling() {
+    if (refreshTimer == null) return;
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+}
+
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+        refreshAll();
+        startPolling();
+    } else {
+        stopPolling();
+    }
+});
+
 refreshAll();
-setInterval(refreshAll, 15000);
+if (document.visibilityState === "visible") {
+    startPolling();
+}
+
+// Registro del service worker (PWA)
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+        navigator.serviceWorker
+            .register("./sw.js")
+            .catch(err => console.warn("SW no registrado:", err));
+    });
+}
