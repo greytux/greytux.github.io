@@ -92,6 +92,13 @@ async function refreshNearbyStopsWrapper() {
     }
 }
 
+function isStopAccordionOpen(stopId) {
+    const el = document.querySelector(
+        `.accordion-item[data-stop-id="${stopId}"]`
+    );
+    return !!(el && el.classList.contains("open"));
+}
+
 // --- Refresh global ---
 async function refreshAll() {
     if (globalStatusEl) {
@@ -115,8 +122,10 @@ async function refreshAll() {
         );
     }
 
-    // 3) Refrescar paradas favoritas
-    await Promise.all(STOPS.map(stop => refreshStop(stop)));
+    // 3) Refrescar solo las paradas con acordeón abierto. Las cerradas se
+    //    refrescarán en el momento de abrirlas (ver header click handler).
+    const openStops = STOPS.filter(s => isStopAccordionOpen(s.id));
+    await Promise.all(openStops.map(stop => refreshStop(stop)));
 
     // 4) Paradas cercanas
     await refreshNearbyStopsWrapper();

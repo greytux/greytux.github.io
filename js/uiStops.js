@@ -294,7 +294,9 @@ function buildStopAccordionElement(stopConfig, opts = {}) {
             const btn = document.createElement("button");
             btn.type = "button";
             btn.className = "stop-action-btn" + (danger ? " danger" : "");
-            btn.title = actTitle || "";
+            const label = actTitle || icon || "";
+            btn.title = label;
+            btn.setAttribute("aria-label", label);
             btn.textContent = icon;
             if (disabled) btn.disabled = true;
             btn.addEventListener("click", (e) => {
@@ -308,8 +310,20 @@ function buildStopAccordionElement(stopConfig, opts = {}) {
     }
 
     header.addEventListener("click", () => {
+        const willOpen = !article.classList.contains("open");
         article.classList.toggle("open");
+        // Al abrir un acordeón, refrescar inmediatamente sin esperar al siguiente
+        // tick (que ya no refresca acordeones cerrados, así que no hay datos
+        // recién traídos cuando lo abres).
+        if (willOpen) {
+            header.setAttribute("aria-expanded", "true");
+            refreshStop(stopConfig).catch(err => console.warn("refreshStop on open failed", err));
+        } else {
+            header.setAttribute("aria-expanded", "false");
+        }
     });
+
+    header.setAttribute("aria-expanded", open ? "true" : "false");
 
     return article;
 }
