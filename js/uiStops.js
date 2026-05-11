@@ -83,6 +83,11 @@ export function renderStop(stopConfig, arrivals) {
     evaluateAlarmsForStop(id, arrivals);
     renderAlarmsForStop(id);
 
+    // Refrescar el link de ubicación en cada render: si las coords acaban de
+    // llegar (p.ej. vía StopInfo de /arrives/ porque /detail/ no las daba),
+    // el enlace "Ver ubicación" aparece sin esperar a re-renderizar acordeones.
+    updateLocationLink(id);
+
     const listEl = document.getElementById(`buses-${id}`);
     const statusWrapper = document.getElementById(`status-${id}`);
     const reachEl = document.getElementById(`reach-${id}`);

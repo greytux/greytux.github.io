@@ -142,9 +142,49 @@ export async function getArrivals(stopId, _retries = 0) {
         throw new Error("Error API arrives (" + stopId + "): " + (json.description || json.code));
     }
 
-    const data = json.data && json.data[0] && json.data[0].Arrive
-        ? json.data[0].Arrive
-        : [];
+    const data0 = json.data && json.data[0];
+    const data = data0 && data0.Arrive ? data0.Arrive : [];
+
+    // Fallback de coordenadas: algunas paradas (p.ej. 2677) no exponen
+    // geometry vía /detail/, pero sí dentro de StopInfo de /arrives/.
+    // Si todavía no tenemos coords cacheadas para esta parada, las
+    // intentamos extraer aquí.
+    try {
+        const stopInfo = data0 && (
+            (Array.isArray(data0.StopInfo) && data0.StopInfo[0]) ||
+            (Array.isArray(data0.stopInfo) && data0.stopInfo[0]) ||
+            null
+        );
+        if (stopInfo && !STOP_COORDS[stopId]) {
+            let lat = null;
+            let lon = null;
+
+            if (
+                stopInfo.geometry &&
+                Array.isArray(stopInfo.geometry.coordinates) &&
+                stopInfo.geometry.coordinates.length >= 2
+            ) {
+                lon = parseFloat(stopInfo.geometry.coordinates[0]);
+                lat = parseFloat(stopInfo.geometry.coordinates[1]);
+            }
+            if ((lat == null || Number.isNaN(lat)) && stopInfo.latitude != null) {
+                lat = parseFloat(stopInfo.latitude);
+            }
+            if ((lon == null || Number.isNaN(lon)) && stopInfo.longitude != null) {
+                lon = parseFloat(stopInfo.longitude);
+            }
+
+            if (
+                lat != null && lon != null &&
+                !Number.isNaN(lat) && !Number.isNaN(lon)
+            ) {
+                STOP_COORDS[stopId] = { lat, lon };
+                console.log("Coords parada (vía arrives)", stopId, STOP_COORDS[stopId]);
+            }
+        }
+    } catch (e) {
+        console.warn("No se pudieron extraer coords de StopInfo", e);
+    }
 
     return data;
 }
