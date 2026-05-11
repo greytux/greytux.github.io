@@ -365,6 +365,40 @@ h1 {
     font-size: 11px;
     color: var(--muted);
     margin-top: 6px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    line-height: 1.35;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+/* Veredictos "¿Llego?" — codifica la decisión por color */
+.walk-time.verdict-comfortable {
+    background: #dcfce7;
+    color: #14532d;
+    font-weight: 500;
+}
+
+.walk-time.verdict-tight {
+    background: #fef3c7;
+    color: #78350f;
+    font-weight: 500;
+}
+
+.walk-time.verdict-urgent {
+    background: #fed7aa;
+    color: #7c2d12;
+    font-weight: 600;
+}
+
+.walk-time.verdict-miss-catch-next {
+    background: #e0e7ff;
+    color: #1e3a8a;
+    font-weight: 500;
+}
+
+.walk-time.verdict-miss {
+    background: #f3f4f6;
+    color: #6b7280;
 }
 
 .reach-time {
