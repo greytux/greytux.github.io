@@ -18,10 +18,22 @@ import {
     refreshStop,
     renderNearbyStops,
     createDynamicStopAccordion,
-    filterMyStopsByLine
+    filterMyStopsByLine,
+    renderFavorites,
+    renderDynamicStops,
+    handleAddFavorite
 } from "./uiStops.js";
 
 import { initSlider } from "./slider.js";
+
+import { toast } from "./toast.js";
+
+import { hasAnyAlarms, getAlarmedStopIds } from "./alarms.js";
+
+import {
+    ensureMapInitialized,
+    refreshMapMarkers
+} from "./map.js";
 
 // Util para normalizar número de línea (quita ceros a la izquierda)
 function normalizeLine(l) {
@@ -35,6 +47,10 @@ const refreshBtn      = document.getElementById("refresh-now");
 
 const addStopForm     = document.getElementById("add-stop-form");
 const stopIdInput     = document.getElementById("stop-id-input");
+
+const addFavoriteForm = document.getElementById("add-favorite-form");
+const favIdInput      = document.getElementById("fav-id-input");
+const favLinesInput   = document.getElementById("fav-lines-input");
 
 const nearbyStatusEl  = document.getElementById("nearby-status");
 const nearbyLineInput = document.getElementById("nearby-line-input");
@@ -82,6 +98,13 @@ async function refreshNearbyStopsWrapper() {
     }
 }
 
+function isStopAccordionOpen(stopId) {
+    const el = document.querySelector(
+        `.accordion-item[data-stop-id="${stopId}"]`
+    );
+    return !!(el && el.classList.contains("open"));
+}
+
 // --- Refresh global ---
 async function refreshAll() {
     if (globalStatusEl) {
@@ -105,8 +128,10 @@ async function refreshAll() {
         );
     }
 
-    // 3) Refrescar paradas favoritas
-    await Promise.all(STOPS.map(stop => refreshStop(stop)));
+    // 3) Refrescar solo las paradas con acordeón abierto. Las cerradas se
+    //    refrescarán en el momento de abrirlas (ver header click handler).
+    const openStops = STOPS.filter(s => isStopAccordionOpen(s.id));
+    await Promise.all(openStops.map(stop => refreshStop(stop)));
 
     // 4) Paradas cercanas
     await refreshNearbyStopsWrapper();
@@ -120,11 +145,24 @@ async function refreshAll() {
             globalStatusEl.textContent = `Última actualización: ${now}`;
         }
     }
+
+    // Si el mapa ya está inicializado, refrescar markers tras cambiar datos
+    refreshMapMarkers();
 }
 
 // ---- Listeners básicos ----
-setupAccordionListeners();   // Acordeones estáticos de favoritas
-initSlider();                // Tabs + swipe
+setupAccordionListeners();              // No-op (compat); favoritas dinámicas se montan abajo
+renderFavorites();                      // Pinta favoritas desde localStorage
+renderDynamicStops(normalizeLine);      // Pinta Mis paradas desde localStorage
+initSlider();                           // Tabs + swipe
+
+// Inicializar mapa la primera vez que se active su pestaña (lazy)
+const mapTabBtn = document.querySelector('.tab-btn[data-index="3"]');
+if (mapTabBtn) {
+    mapTabBtn.addEventListener("click", () => {
+        ensureMapInitialized();
+    });
+}
 
 // Botón refresh global
 if (refreshBtn) {
@@ -138,6 +176,32 @@ if (refreshBtn) {
     });
 }
 
+// Formulario "Favoritas" (añadir favorita persistida)
+if (addFavoriteForm && favIdInput) {
+    addFavoriteForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const raw = favIdInput.value.trim();
+        if (!raw) return;
+
+        const stopId = parseInt(raw, 10);
+        if (Number.isNaN(stopId) || stopId <= 0) {
+            toast("Introduce un número de parada válido.", { type: "error" });
+            return;
+        }
+
+        const linesRaw = favLinesInput ? favLinesInput.value.trim() : "";
+        const filterLines = linesRaw
+            ? linesRaw.split(",").map(l => normalizeLine(l)).filter(Boolean)
+            : null;
+
+        const ok = await handleAddFavorite(stopId, filterLines);
+        if (ok) {
+            favIdInput.value = "";
+            if (favLinesInput) favLinesInput.value = "";
+        }
+    });
+}
+
 // Formulario "Mis paradas" (añadir parada)
 if (addStopForm && stopIdInput) {
     addStopForm.addEventListener("submit", async (e) => {
@@ -147,7 +211,7 @@ if (addStopForm && stopIdInput) {
 
         const stopId = parseInt(raw, 10);
         if (Number.isNaN(stopId) || stopId <= 0) {
-            alert("Introduce un número de parada válido.");
+            toast("Introduce un número de parada válido.", { type: "error" });
             return;
         }
 
@@ -209,6 +273,75 @@ if (nearbyClearBtn && nearbyLineInput) {
     });
 }
 
-// Lanzar la primera actualización y el intervalo
+// Polling con setTimeout encadenado: el siguiente tick solo se planifica
+// cuando el anterior ha terminado, así un tick lento no solapa con el siguiente.
+const REFRESH_MS = 45000;
+let refreshTimer = null;
+let pollingActive = false;
+
+// Tick "ligero": solo paradas con alarma. Sin geolocalización ni cercanas.
+async function refreshAlarmedOnly() {
+    const ids = getAlarmedStopIds();
+    if (!ids.length) return;
+    if (isApiInCooldown()) return;
+    await Promise.all(ids.map(id => refreshStop({ id })));
+}
+
+// Tick decidido por la visibilidad de la pestaña
+async function pollingTick() {
+    if (document.visibilityState === "visible") {
+        await refreshAll();
+    } else if (hasAnyAlarms()) {
+        await refreshAlarmedOnly();
+    }
+}
+
+async function pollingLoop() {
+    if (!pollingActive) return;
+    try {
+        await pollingTick();
+    } catch (err) {
+        console.warn("pollingTick error", err);
+    }
+    if (!pollingActive) return;
+    refreshTimer = setTimeout(pollingLoop, REFRESH_MS);
+}
+
+function startPolling() {
+    if (pollingActive) return;
+    pollingActive = true;
+    refreshTimer = setTimeout(pollingLoop, REFRESH_MS);
+}
+
+function stopPolling() {
+    pollingActive = false;
+    if (refreshTimer != null) {
+        clearTimeout(refreshTimer);
+        refreshTimer = null;
+    }
+}
+
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+        refreshAll();
+        startPolling();
+    } else if (!hasAnyAlarms()) {
+        stopPolling();
+    }
+    // Si hay alarmas activas mantenemos el polling también con la pestaña oculta
+    // pero solo refresca paradas con alarma (refreshAlarmedOnly).
+});
+
 refreshAll();
-setInterval(refreshAll, 15000);
+if (document.visibilityState === "visible") {
+    startPolling();
+}
+
+// Registro del service worker (PWA)
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+        navigator.serviceWorker
+            .register("./sw.js")
+            .catch(err => console.warn("SW no registrado:", err));
+    });
+}

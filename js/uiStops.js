@@ -1,15 +1,32 @@
 import {
     STOPS,
+    FAVORITES,
+    DYNAMIC_STOPS,
     STOP_COORDS,
     STOP_LINES,
     nearbyLineFilter,
-    userLocation
+    userLocation,
+    addFavorite,
+    removeFavorite,
+    moveFavorite,
+    setFavoriteCoords,
+    addDynamicStop,
+    removeDynamicStop
 } from "./state.js";
+
+import { openCoordPicker } from "./coordPicker.js";
 
 import {
     getArrivals,
     fetchStopCoords
 } from "./apiEmt.js";
+
+import { toast, confirmDialog } from "./toast.js";
+
+import {
+    evaluateAlarmsForStop,
+    renderAlarmsForStop
+} from "./alarms.js";
 
 // --- Enlace "Ver ubicación" + "Ver ruta andando" ---
 function updateLocationLink(stopId) {
@@ -63,6 +80,16 @@ function updateLocationLink(stopId) {
 // ---- RENDER PARADA INDIVIDUAL ----
 export function renderStop(stopConfig, arrivals) {
     const { id, filterLines } = stopConfig;
+
+    // Evaluar alarmas siempre, antes de filtrar por filterLines (la alarma puede
+    // ser de una línea distinta a las filtradas en la favorita).
+    evaluateAlarmsForStop(id, arrivals);
+    renderAlarmsForStop(id);
+
+    // Refrescar el link de ubicación en cada render: si las coords acaban de
+    // llegar (p.ej. vía StopInfo de /arrives/ porque /detail/ no las daba),
+    // el enlace "Ver ubicación" aparece sin esperar a re-renderizar acordeones.
+    updateLocationLink(id);
 
     const listEl = document.getElementById(`buses-${id}`);
     const statusWrapper = document.getElementById(`status-${id}`);
@@ -227,6 +254,238 @@ export async function refreshStop(stopConfig) {
     }
 }
 
+// ---- Helper: construir un acordeón de parada ----
+function buildStopAccordionElement(stopConfig, opts = {}) {
+    const {
+        title,
+        subtitle,
+        open = false,
+        actions = null
+    } = opts;
+
+    const id = stopConfig.id;
+    const article = document.createElement("article");
+    article.className = "accordion-item" + (open ? " open" : "");
+    article.dataset.stopId = String(id);
+
+    const displayTitle = title ?? `Parada ${id}`;
+    const displaySubtitle = subtitle ?? `Parada ${id}`;
+
+    article.innerHTML = `
+      <button class="accordion-header" type="button">
+        <div class="accordion-header-main">
+          <div class="stop-name"></div>
+          <div class="stop-subtitle"></div>
+        </div>
+        <span class="badge">${id}</span>
+      </button>
+      <div class="accordion-panel">
+        <div class="walk-time" id="walk-${id}"></div>
+        <div class="reach-time" id="reach-${id}"></div>
+        <div id="location-${id}" class="location-link-container"></div>
+        <div class="status" id="status-${id}">
+          <span class="status-dot"></span>
+          <span>Cargando…</span>
+        </div>
+        <ul class="bus-list" id="buses-${id}"></ul>
+        <div class="alarms-section" id="alarms-${id}"></div>
+      </div>
+    `;
+
+    article.querySelector(".stop-name").textContent = displayTitle;
+    article.querySelector(".stop-subtitle").textContent = displaySubtitle;
+
+    const header = article.querySelector(".accordion-header");
+
+    if (actions && actions.length) {
+        const actionsEl = document.createElement("div");
+        actionsEl.className = "stop-actions";
+        actions.forEach(({ icon, title: actTitle, danger, disabled, onClick }) => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "stop-action-btn" + (danger ? " danger" : "");
+            const label = actTitle || icon || "";
+            btn.title = label;
+            btn.setAttribute("aria-label", label);
+            btn.textContent = icon;
+            if (disabled) btn.disabled = true;
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                if (!btn.disabled) onClick();
+            });
+            actionsEl.appendChild(btn);
+        });
+        const badge = header.querySelector(".badge");
+        header.insertBefore(actionsEl, badge);
+    }
+
+    header.addEventListener("click", () => {
+        const willOpen = !article.classList.contains("open");
+        article.classList.toggle("open");
+        // Al abrir un acordeón, refrescar inmediatamente sin esperar al siguiente
+        // tick (que ya no refresca acordeones cerrados, así que no hay datos
+        // recién traídos cuando lo abres).
+        if (willOpen) {
+            header.setAttribute("aria-expanded", "true");
+            refreshStop(stopConfig).catch(err => console.warn("refreshStop on open failed", err));
+        } else {
+            header.setAttribute("aria-expanded", "false");
+        }
+    });
+
+    header.setAttribute("aria-expanded", open ? "true" : "false");
+
+    return article;
+}
+
+function favoriteSubtitle(fav) {
+    if (fav.filterLines && fav.filterLines.length) {
+        const ls = fav.filterLines.join(", ");
+        return `Parada ${fav.id} · Líneas ${ls}`;
+    }
+    return `Parada ${fav.id} · Todas las líneas`;
+}
+
+function favoriteTitle(fav) {
+    if (fav.label && fav.label.trim()) {
+        // Quitar "- Parada NNNN" del label si está presente, para no duplicar
+        return fav.label
+            .replace(new RegExp(`\\s*[-·]\\s*Parada\\s+${fav.id}\\s*$`, "i"), "")
+            .trim();
+    }
+    return `Parada ${fav.id}`;
+}
+
+// ---- RENDER FAVORITAS ----
+export async function renderFavorites() {
+    const container = document.getElementById("favorites-stops");
+    if (!container) return;
+
+    // Recordar qué favoritas estaban abiertas para mantener el estado
+    const prevOpen = new Set();
+    container.querySelectorAll(".accordion-item.open").forEach(item => {
+        if (item.dataset.stopId) prevOpen.add(item.dataset.stopId);
+    });
+
+    container.innerHTML = "";
+
+    if (!FAVORITES.length) {
+        const div = document.createElement("div");
+        div.className = "empty";
+        div.textContent = "Sin favoritas todavía. Añade una con el formulario.";
+        container.appendChild(div);
+        return;
+    }
+
+    FAVORITES.forEach((fav, idx) => {
+        // Por defecto las favoritas se abren si es la primera carga,
+        // o si ya estaban abiertas antes del re-render.
+        const wasOpen = prevOpen.size === 0 || prevOpen.has(String(fav.id));
+
+        const article = buildStopAccordionElement(fav, {
+            title: favoriteTitle(fav),
+            subtitle: favoriteSubtitle(fav),
+            open: wasOpen,
+            actions: [
+                {
+                    icon: "↑",
+                    title: "Subir",
+                    disabled: idx === 0,
+                    onClick: () => {
+                        moveFavorite(fav.id, -1);
+                        renderFavorites().then(refreshFavorites);
+                    }
+                },
+                {
+                    icon: "↓",
+                    title: "Bajar",
+                    disabled: idx === FAVORITES.length - 1,
+                    onClick: () => {
+                        moveFavorite(fav.id, +1);
+                        renderFavorites().then(refreshFavorites);
+                    }
+                },
+                {
+                    icon: "📍",
+                    title: STOP_COORDS[fav.id]
+                        ? "Editar ubicación"
+                        : "Fijar ubicación",
+                    onClick: async () => {
+                        const result = await openCoordPicker({
+                            stopId: fav.id,
+                            stopName: favoriteTitle(fav)
+                        });
+                        if (!result) return;
+                        if (setFavoriteCoords(fav.id, result.lat, result.lon)) {
+                            await renderFavorites();
+                            updateLocationLink(fav.id);
+                            toast("Ubicación guardada.", { type: "success" });
+                        }
+                    }
+                },
+                {
+                    icon: "✕",
+                    title: "Quitar de favoritas",
+                    danger: true,
+                    onClick: async () => {
+                        const ok = await confirmDialog(
+                            `¿Quitar la parada ${fav.id} de favoritas?`,
+                            { okText: "Quitar", danger: true }
+                        );
+                        if (!ok) return;
+                        removeFavorite(fav.id);
+                        await renderFavorites();
+                        toast(`Parada ${fav.id} quitada de favoritas.`, { type: "success" });
+                    }
+                }
+            ]
+        });
+
+        container.appendChild(article);
+        updateLocationLink(fav.id);
+        renderAlarmsForStop(fav.id);
+    });
+}
+
+async function refreshFavorites() {
+    await Promise.all(FAVORITES.map(fav => refreshStop(fav)));
+}
+
+// --- Añadir favorita desde formulario ---
+export async function handleAddFavorite(stopId, filterLines) {
+    if (FAVORITES.some(s => s.id === stopId)) {
+        toast(`La parada ${stopId} ya está en favoritas.`, { type: "warn" });
+        return false;
+    }
+
+    let arrivals;
+    try {
+        arrivals = await getArrivals(stopId);
+    } catch (err) {
+        console.error(err);
+        toast(
+            `No se ha podido obtener información para la parada ${stopId}. Comprueba el número.`,
+            { type: "error", duration: 5000 }
+        );
+        return false;
+    }
+
+    const fav = { id: stopId, label: `Parada ${stopId}` };
+    if (filterLines && filterLines.length) fav.filterLines = filterLines;
+
+    if (!addFavorite(fav)) return false;
+
+    try {
+        await fetchStopCoords(stopId);
+    } catch (e) {
+        console.warn("No se pudieron obtener coords para la favorita", stopId);
+    }
+
+    await renderFavorites();
+    renderStop(fav, arrivals);
+    return true;
+}
+
 // --- Renderizado de paradas cercanas como acordeones ---
 export async function renderNearbyStops(stops) {
     const nearbyAccordionEl = document.getElementById("nearby-accordion");
@@ -292,66 +551,118 @@ export async function renderNearbyStops(stops) {
             }
         }
 
-        const article = document.createElement("article");
-        article.className = "accordion-item";
-        article.dataset.stopId = String(idNum);
-
-        if (prevOpenIds.has(String(idNum))) {
-            article.classList.add("open");
-        }
-
-        article.innerHTML = `
-      <button class="accordion-header">
-        <div class="accordion-header-main">
-          <div class="stop-name">${name}</div>
-          <div class="stop-subtitle">Parada ${idNum} · Cercana a tu ubicación</div>
-        </div>
-        <span class="badge">${idNum}</span>
-      </button>
-      <div class="accordion-panel">
-        <div class="walk-time" id="walk-${idNum}"></div>
-        <div class="reach-time" id="reach-${idNum}"></div>
-        <div id="location-${idNum}" class="location-link-container"></div>
-        <div class="status" id="status-${idNum}">
-          <span class="status-dot"></span>
-          <span>Cargando…</span>
-        </div>
-        <ul class="bus-list" id="buses-${idNum}"></ul>
-      </div>
-    `;
-
-        nearbyAccordionEl.appendChild(article);
-
-        const header = article.querySelector(".accordion-header");
-        header.addEventListener("click", () => {
-            article.classList.toggle("open");
-        });
-
-        updateLocationLink(idNum);
-
         const cfg = { id: idNum };
         if (nearbyLineFilter) {
             cfg.filterLines = [nearbyLineFilter];
         }
+
+        const article = buildStopAccordionElement(cfg, {
+            title: name,
+            subtitle: `Parada ${idNum} · Cercana a tu ubicación`,
+            open: prevOpenIds.has(String(idNum)),
+            actions: [
+                {
+                    icon: "★",
+                    title: "Añadir a favoritas",
+                    onClick: async () => {
+                        const fav = { id: idNum, label: name };
+                        if (nearbyLineFilter) fav.filterLines = [nearbyLineFilter];
+                        if (addFavorite(fav)) {
+                            await renderFavorites();
+                            await refreshStop(fav);
+                        }
+                    }
+                }
+            ]
+        });
+
+        nearbyAccordionEl.appendChild(article);
+        updateLocationLink(idNum);
+        renderAlarmsForStop(idNum);
         stopConfigs.push(cfg);
     }
 
     await Promise.all(stopConfigs.map(cfg => refreshStop(cfg)));
 }
 
-// ---- ACCORDIÓN ESTÁTICO (favoritas ya existentes en HTML) ----
+// ---- ACCORDIÓN ESTÁTICO (compat — ya no hay favoritas estáticas, pero se conserva por si acaso) ----
 export function setupAccordionListeners() {
-    const items = document.querySelectorAll(".accordion-item");
-    items.forEach(item => {
-        const header = item.querySelector(".accordion-header");
-        if (!header) return;
-        header.addEventListener("click", () => {
-            item.classList.toggle("open");
-        });
-    });
+    // Las favoritas ahora se generan dinámicamente y registran sus propios listeners.
+    // Mantenemos la función para que no rompa imports antiguos.
 }
 
 // ---- PARADAS DINÁMICAS ("Mis paradas") ----
+export function renderDynamicStops(normalizeLineFn) {
+    const container = document.getElementById("dynamic-stops");
+    if (!container) return;
+
+    // Mantener qué acordeones estaban abiertos
+    const prevOpen = new Set();
+    container.querySelectorAll(".accordion-item.open").forEach(item => {
+        if (item.dataset.stopId) prevOpen.add(item.dataset.stopId);
+    });
+
+    container.innerHTML = "";
+
+    if (!DYNAMIC_STOPS.length) {
+        return;
+    }
+
+    DYNAMIC_STOPS.forEach(stop => {
+        const wasOpen = prevOpen.size === 0 || prevOpen.has(String(stop.id));
+
+        const article = buildStopAccordionElement(stop, {
+            title: `Parada ${stop.id}`,
+            subtitle: `Número de parada ${stop.id}`,
+            open: wasOpen,
+            actions: [
+                {
+                    icon: "★",
+                    title: "Añadir a favoritas",
+                    onClick: async () => {
+                        const fav = { id: stop.id, label: `Parada ${stop.id}` };
+                        if (addFavorite(fav)) {
+                            // También quitarla de Mis paradas para no duplicar polling
+                            removeDynamicStop(stop.id);
+                            await renderFavorites();
+                            renderDynamicStops(normalizeLineFn);
+                            await refreshStop(fav);
+                            toast(`Parada ${stop.id} movida a favoritas.`, { type: "success" });
+                        } else {
+                            toast(`La parada ${stop.id} ya está en favoritas.`, { type: "warn" });
+                        }
+                    }
+                },
+                {
+                    icon: "✕",
+                    title: "Quitar de Mis paradas",
+                    danger: true,
+                    onClick: async () => {
+                        const ok = await confirmDialog(
+                            `¿Quitar la parada ${stop.id} de Mis paradas?`,
+                            { okText: "Quitar", danger: true }
+                        );
+                        if (!ok) return;
+                        removeDynamicStop(stop.id);
+                        renderDynamicStops(normalizeLineFn);
+                        toast(`Parada ${stop.id} quitada.`, { type: "success" });
+                    }
+                }
+            ]
+        });
+
+        container.appendChild(article);
+        updateLocationLink(stop.id);
+        renderAlarmsForStop(stop.id);
+    });
+
+    // Reaplicar filtro de línea si hay
+    const myLineInput = document.getElementById("my-line-input");
+    if (myLineInput && normalizeLineFn && myLineInput.value.trim()) {
+        filterMyStopsByLine(myLineInput.value.trim(), normalizeLineFn);
+    }
+}
+
 export async function createDynamicStopAccordion(stopId, normalizeLineFn) {
     if (STOPS.some(s => s.id === stopId)) {
         const existing = document.querySelector(
@@ -369,14 +680,15 @@ export async function createDynamicStopAccordion(stopId, normalizeLineFn) {
         arrivals = await getArrivals(stopId);
     } catch (err) {
         console.error(err);
-        alert(
-            `No se ha podido obtener información para la parada ${stopId}. Comprueba que el número es correcto.`
+        toast(
+            `No se ha podido obtener información para la parada ${stopId}. Comprueba el número.`,
+            { type: "error", duration: 5000 }
         );
         return;
     }
 
     const stopConfig = { id: stopId, label: `Parada ${stopId}` };
-    STOPS.push(stopConfig);
+    if (!addDynamicStop(stopConfig)) return;
 
     try {
         await fetchStopCoords(stopId);
@@ -384,48 +696,11 @@ export async function createDynamicStopAccordion(stopId, normalizeLineFn) {
         console.warn("No se pudieron obtener coords para la parada dinámica", stopId);
     }
 
-    const dynamicStopsContainer = document.getElementById("dynamic-stops");
-    if (!dynamicStopsContainer) return;
-
-    const article = document.createElement("article");
-    article.className = "accordion-item open";
-    article.dataset.stopId = String(stopId);
-
-    article.innerHTML = `
-    <button class="accordion-header">
-      <div class="accordion-header-main">
-        <div class="stop-name">Parada ${stopId}</div>
-        <div class="stop-subtitle">Número de parada ${stopId}</div>
-      </div>
-      <span class="badge">${stopId}</span>
-    </button>
-    <div class="accordion-panel">
-      <div class="walk-time" id="walk-${stopId}"></div>
-      <div class="reach-time" id="reach-${stopId}"></div>
-      <div id="location-${stopId}" class="location-link-container"></div>
-      <div class="status" id="status-${stopId}">
-        <span class="status-dot"></span>
-        <span>Datos cargados.</span>
-      </div>
-      <ul class="bus-list" id="buses-${stopId}"></ul>
-    </div>
-  `;
-
-    dynamicStopsContainer.appendChild(article);
-
-    const header = article.querySelector(".accordion-header");
-    header.addEventListener("click", () => {
-        article.classList.toggle("open");
-    });
-
-    updateLocationLink(stopId);
+    // Re-render completo de Mis paradas (incluye la nueva), y aprovechamos
+    // los arrivals ya obtenidos para pintar inmediatamente la parada recién
+    // creada sin esperar otra llamada al endpoint.
+    renderDynamicStops(normalizeLineFn);
     renderStop(stopConfig, arrivals);
-
-    // Reaplicar filtro actual si hay
-    const myLineInput = document.getElementById("my-line-input");
-    if (myLineInput && myLineInput.value.trim()) {
-        filterMyStopsByLine(myLineInput.value.trim(), normalizeLineFn);
-    }
 }
 
 // ---- Filtro "mis paradas" ----
