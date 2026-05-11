@@ -10,6 +10,8 @@ import {
     clearStoredToken
 } from "./state.js";
 
+import { trackArrivals } from "./etaTracker.js";
+
 // TODO -> ocultar
 const USER = "diegojesus.escudero@gmail.com";
 const PASS = "Linares251291?";
@@ -199,6 +201,9 @@ export async function getArrivals(stopId, _retries = 0) {
     } catch (e) {
         console.warn("No se pudieron extraer coords de StopInfo", e);
     }
+
+    // Registrar ETAs para poder detectar buses retrasados
+    trackArrivals(stopId, data);
 
     return data;
 }

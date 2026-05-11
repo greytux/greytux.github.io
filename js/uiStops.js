@@ -18,6 +18,8 @@ import { openCoordPicker } from "./coordPicker.js";
 
 import { estimateWalk, computeVerdict } from "./walkTime.js";
 
+import { getDelayInfo } from "./etaTracker.js";
+
 import {
     getArrivals,
     fetchStopCoords
@@ -206,6 +208,8 @@ export function renderStop(stopConfig, arrivals) {
                 ? Math.round(arr.estimateArrive / 60)
                 : null;
 
+            const delay = getDelayInfo(id, arr);
+
             let className = "bus-item";
             if (minutes != null) {
                 if (minutes < 3) {
@@ -214,6 +218,7 @@ export function renderStop(stopConfig, arrivals) {
                     className += " soon";
                 }
             }
+            if (delay) className += " delayed";
             li.className = className;
 
             const left = document.createElement("div");
@@ -225,10 +230,18 @@ export function renderStop(stopConfig, arrivals) {
 
             const textBlock = document.createElement("div");
             textBlock.className = "bus-text";
+
+            const distancePart = arr.DistanceBus != null
+                ? `${arr.DistanceBus} m`
+                : "-";
+            const delayPart = delay
+                ? `<span class="bus-delay ${delay.severity === "high" ? "bus-delay-high" : ""}">⏰ +${delay.slipMin} min retraso</span>`
+                : "";
+
             textBlock.innerHTML = `
         <div class="bus-main">${arr.destination || "Destino no disponible"}</div>
         <div class="bus-sub">
-          Distancia aprox bus-parada: ${arr.DistanceBus != null ? arr.DistanceBus + " m" : "-"}
+          Bus a ${distancePart}${delayPart ? " · " + delayPart : ""}
         </div>
       `;
 
