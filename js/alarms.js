@@ -87,33 +87,29 @@ export function evaluateAlarmsForStop(stopId, arrivals) {
 }
 
 // ---- UI: sección de alarmas dentro del panel de cada parada ----
+// Tres estados visuales:
+//   1) Sin alarmas y colapsado → solo botón "🔔 + Alarma"
+//   2) Con alarmas y colapsado → chips + botón "+"
+//   3) Expandido                → chips (si hay) + formulario para añadir
 export function renderAlarmsForStop(stopId) {
     const container = document.getElementById(`alarms-${stopId}`);
     if (!container) return;
 
-    container.innerHTML = "";
-
+    const expanded = container.dataset.expanded === "true";
     const alarms = getAlarmsForStop(stopId);
 
-    const title = document.createElement("div");
-    title.className = "alarms-title";
-    title.textContent = "🔔 Alarmas";
-    container.appendChild(title);
+    container.innerHTML = "";
+    container.classList.toggle("is-expanded", expanded || alarms.length > 0);
 
-    const chips = document.createElement("div");
-    chips.className = "alarms-chips";
-
-    if (alarms.length === 0) {
-        const empty = document.createElement("div");
-        empty.className = "alarms-empty";
-        empty.textContent = "Sin alarmas. Avísame cuando una línea esté a X min.";
-        chips.appendChild(empty);
-    } else {
+    // Chips de alarmas activas
+    if (alarms.length > 0) {
+        const chips = document.createElement("div");
+        chips.className = "alarms-chips";
         alarms.forEach(alarm => {
             const chip = document.createElement("span");
             chip.className = "alarm-chip";
             chip.innerHTML = `
-                <span class="alarm-chip-text">Línea ${alarm.line} ≤ ${alarm.threshold} min</span>
+                <span class="alarm-chip-text">🔔 Línea ${alarm.line} ≤ ${alarm.threshold} min</span>
                 <button type="button" class="alarm-chip-remove" title="Quitar alarma" aria-label="Quitar alarma">✕</button>
             `;
             chip.querySelector(".alarm-chip-remove").addEventListener("click", () => {
@@ -122,16 +118,41 @@ export function renderAlarmsForStop(stopId) {
             });
             chips.appendChild(chip);
         });
+        container.appendChild(chips);
     }
-    container.appendChild(chips);
 
+    if (!expanded) {
+        // Botón pequeño que expande el formulario al pulsarlo
+        const toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.className = "alarm-toggle-btn";
+        toggle.setAttribute("aria-label", "Añadir alarma de bus");
+        toggle.textContent = alarms.length > 0 ? "+ Otra alarma" : "🔔 + Alarma";
+        toggle.addEventListener("click", () => {
+            container.dataset.expanded = "true";
+            renderAlarmsForStop(stopId);
+            // Foco en el primer input del form
+            const lineInput = container.querySelector(".alarm-line");
+            if (lineInput) lineInput.focus();
+        });
+        container.appendChild(toggle);
+        return;
+    }
+
+    // Estado expandido: formulario
     const form = document.createElement("form");
     form.className = "alarm-form";
     form.innerHTML = `
-        <input type="text"  class="alarm-line"      inputmode="numeric" placeholder="Línea (ej: 137)" />
-        <input type="number" class="alarm-threshold" inputmode="numeric" min="0" max="60" placeholder="min" />
+        <input type="text"   class="alarm-line"      inputmode="numeric" placeholder="Línea (ej: 137)" aria-label="Línea de bus" />
+        <input type="number" class="alarm-threshold" inputmode="numeric" min="0" max="60" placeholder="min" aria-label="Umbral en minutos" />
         <button type="submit" class="alarm-add-btn" title="Añadir alarma">Añadir</button>
+        <button type="button" class="alarm-cancel-btn" title="Cancelar" aria-label="Cancelar añadir alarma">✕</button>
     `;
+
+    form.querySelector(".alarm-cancel-btn").addEventListener("click", () => {
+        container.dataset.expanded = "false";
+        renderAlarmsForStop(stopId);
+    });
 
     form.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -166,8 +187,7 @@ export function renderAlarmsForStop(stopId) {
             );
         }
 
-        lineInput.value = "";
-        threshInput.value = "";
+        container.dataset.expanded = "false";
         renderAlarmsForStop(stopId);
     });
 
