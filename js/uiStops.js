@@ -9,9 +9,12 @@ import {
     addFavorite,
     removeFavorite,
     moveFavorite,
+    setFavoriteCoords,
     addDynamicStop,
     removeDynamicStop
 } from "./state.js";
+
+import { openCoordPicker } from "./coordPicker.js";
 
 import {
     getArrivals,
@@ -400,6 +403,24 @@ export async function renderFavorites() {
                     onClick: () => {
                         moveFavorite(fav.id, +1);
                         renderFavorites().then(refreshFavorites);
+                    }
+                },
+                {
+                    icon: "📍",
+                    title: STOP_COORDS[fav.id]
+                        ? "Editar ubicación"
+                        : "Fijar ubicación",
+                    onClick: async () => {
+                        const result = await openCoordPicker({
+                            stopId: fav.id,
+                            stopName: favoriteTitle(fav)
+                        });
+                        if (!result) return;
+                        if (setFavoriteCoords(fav.id, result.lat, result.lon)) {
+                            await renderFavorites();
+                            updateLocationLink(fav.id);
+                            toast("Ubicación guardada.", { type: "success" });
+                        }
                     }
                 },
                 {

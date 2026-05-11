@@ -23,6 +23,16 @@ function sanitizeFavorite(s) {
             .filter(Boolean);
         if (lines.length) clean.filterLines = lines;
     }
+    if (
+        s.coords &&
+        Number.isFinite(parseFloat(s.coords.lat)) &&
+        Number.isFinite(parseFloat(s.coords.lon))
+    ) {
+        clean.coords = {
+            lat: parseFloat(s.coords.lat),
+            lon: parseFloat(s.coords.lon)
+        };
+    }
     return clean;
 }
 
@@ -128,6 +138,16 @@ export function moveFavorite(id, direction) {
     return true;
 }
 
+export function setFavoriteCoords(id, lat, lon) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+    const fav = FAVORITES.find(s => s.id === id);
+    if (!fav) return false;
+    fav.coords = { lat, lon };
+    STOP_COORDS[id] = { lat, lon };
+    persistFavorites();
+    return true;
+}
+
 export function addDynamicStop(stop) {
     const clean = sanitizeDynamic(stop);
     if (!clean) return false;
@@ -150,6 +170,19 @@ export function removeDynamicStop(id) {
 // Coordenadas y líneas por parada
 export const STOP_COORDS = {};
 export const STOP_LINES  = {};
+
+// Hidratar el cache con coordenadas manuales persistidas en favoritas.
+// Hacemos esto al cargar el módulo para que cualquier consumidor (renderStop,
+// map.js, etc.) ya las tenga disponibles sin esperar a una llamada a la API.
+FAVORITES.forEach(f => {
+    if (
+        f.coords &&
+        Number.isFinite(f.coords.lat) &&
+        Number.isFinite(f.coords.lon)
+    ) {
+        STOP_COORDS[f.id] = { lat: f.coords.lat, lon: f.coords.lon };
+    }
+});
 
 // Ubicación usuario
 export let userLocation = null;

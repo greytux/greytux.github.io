@@ -145,6 +145,20 @@ export async function getArrivals(stopId, _retries = 0) {
     const data0 = json.data && json.data[0];
     const data = data0 && data0.Arrive ? data0.Arrive : [];
 
+    // Aprovechamos los arrivals para cachear las líneas que pasan por la
+    // parada. Así fetchStopCoords no entra en bucle reintentando /detail/
+    // si las coords ya están manualmente fijadas pero las líneas no.
+    if (!STOP_LINES[stopId] && Array.isArray(data) && data.length > 0) {
+        const linesSet = new Set();
+        data.forEach(a => {
+            const l = String(a.line || "").trim().replace(/^0+/, "");
+            if (l) linesSet.add(l);
+        });
+        if (linesSet.size > 0) {
+            STOP_LINES[stopId] = [...linesSet];
+        }
+    }
+
     // Fallback de coordenadas: algunas paradas (p.ej. 2677) no exponen
     // geometry vía /detail/, pero sí dentro de StopInfo de /arrives/.
     // Si todavía no tenemos coords cacheadas para esta parada, las
@@ -216,6 +230,25 @@ function getStopLinesFromRawStop(rawStop) {
     return [];
 }
 
+async function fetchStopDetailRaw(stopId, baseUrl) {
+    const res = await fetch(
+        `${baseUrl}/transport/busemtmad/stops/${stopId}/detail/`,
+        {
+            method: "GET",
+            headers: {
+                "accessToken": accessToken
+            }
+        }
+    );
+
+    if (!res.ok) {
+        return { ok: false, status: res.status };
+    }
+
+    const json = await res.json();
+    return { ok: true, json };
+}
+
 export async function fetchStopCoords(stopId) {
     if (STOP_COORDS[stopId] && STOP_LINES[stopId]) return STOP_COORDS[stopId];
 
@@ -227,22 +260,20 @@ export async function fetchStopCoords(stopId) {
         await login();
     }
 
-    const res = await fetch(
-        `${BASE_URL_V1}/transport/busemtmad/stops/${stopId}/detail/`,
-        {
-            method: "GET",
-            headers: {
-                "accessToken": accessToken
-            }
+    // Intentamos primero V1; si devuelve 81 (No records) o similar,
+    // probamos V2 antes de rendirnos. Algunas paradas (p.ej. 2677) no
+    // existen en V1 pero sí en V2.
+    let attempt = await fetchStopDetailRaw(stopId, BASE_URL_V1);
+    if (!attempt.ok) {
+        console.warn("Error HTTP en detalle V1 de parada:", stopId, attempt.status);
+        attempt = await fetchStopDetailRaw(stopId, BASE_URL_V2);
+        if (!attempt.ok) {
+            console.warn("Error HTTP en detalle V2 de parada:", stopId, attempt.status);
+            return null;
         }
-    );
-
-    if (!res.ok) {
-        console.warn("Error HTTP en detalle de parada:", res.status);
-        return null;
     }
 
-    const json = await res.json();
+    let json = attempt.json;
     console.log("DETAIL JSON stop", stopId, json);
 
     if (isLimitErrorJson(json)) {
@@ -250,9 +281,31 @@ export async function fetchStopCoords(stopId) {
         throw new Error("API_LIMIT_REACHED");
     }
 
+    // Si V1 dio code distinto de 00, reintentar con V2
     if (json.code !== "00") {
-        console.warn("Error API detalle parada:", json.description || json.code);
-        return null;
+        console.warn(
+            "Detalle V1 falló para parada", stopId, ":",
+            json.description || json.code, "— probando V2"
+        );
+        const attempt2 = await fetchStopDetailRaw(stopId, BASE_URL_V2);
+        if (attempt2.ok) {
+            console.log("DETAIL V2 JSON stop", stopId, attempt2.json);
+            if (isLimitErrorJson(attempt2.json)) {
+                activateApiCooldown();
+                throw new Error("API_LIMIT_REACHED");
+            }
+            if (attempt2.json.code === "00") {
+                json = attempt2.json;
+            } else {
+                console.warn(
+                    "Detalle V2 también falló para parada", stopId, ":",
+                    attempt2.json.description || attempt2.json.code
+                );
+                return null;
+            }
+        } else {
+            return null;
+        }
     }
 
     // EMT devuelve la información de la parada en varias formas posibles:
