@@ -20,6 +20,7 @@ import {
     createDynamicStopAccordion,
     filterMyStopsByLine,
     renderFavorites,
+    renderDynamicStops,
     handleAddFavorite
 } from "./uiStops.js";
 
@@ -28,6 +29,11 @@ import { initSlider } from "./slider.js";
 import { toast } from "./toast.js";
 
 import { hasAnyAlarms, getAlarmedStopIds } from "./alarms.js";
+
+import {
+    ensureMapInitialized,
+    refreshMapMarkers
+} from "./map.js";
 
 // Util para normalizar número de línea (quita ceros a la izquierda)
 function normalizeLine(l) {
@@ -139,12 +145,24 @@ async function refreshAll() {
             globalStatusEl.textContent = `Última actualización: ${now}`;
         }
     }
+
+    // Si el mapa ya está inicializado, refrescar markers tras cambiar datos
+    refreshMapMarkers();
 }
 
 // ---- Listeners básicos ----
-setupAccordionListeners();   // No-op (compat); favoritas dinámicas se montan abajo
-renderFavorites();           // Pinta favoritas desde localStorage
-initSlider();                // Tabs + swipe
+setupAccordionListeners();              // No-op (compat); favoritas dinámicas se montan abajo
+renderFavorites();                      // Pinta favoritas desde localStorage
+renderDynamicStops(normalizeLine);      // Pinta Mis paradas desde localStorage
+initSlider();                           // Tabs + swipe
+
+// Inicializar mapa la primera vez que se active su pestaña (lazy)
+const mapTabBtn = document.querySelector('.tab-btn[data-index="3"]');
+if (mapTabBtn) {
+    mapTabBtn.addEventListener("click", () => {
+        ensureMapInitialized();
+    });
+}
 
 // Botón refresh global
 if (refreshBtn) {
@@ -255,9 +273,11 @@ if (nearbyClearBtn && nearbyLineInput) {
     });
 }
 
-// Lanzar la primera actualización y el intervalo
+// Polling con setTimeout encadenado: el siguiente tick solo se planifica
+// cuando el anterior ha terminado, así un tick lento no solapa con el siguiente.
 const REFRESH_MS = 45000;
 let refreshTimer = null;
+let pollingActive = false;
 
 // Tick "ligero": solo paradas con alarma. Sin geolocalización ni cercanas.
 async function refreshAlarmedOnly() {
@@ -276,15 +296,29 @@ async function pollingTick() {
     }
 }
 
+async function pollingLoop() {
+    if (!pollingActive) return;
+    try {
+        await pollingTick();
+    } catch (err) {
+        console.warn("pollingTick error", err);
+    }
+    if (!pollingActive) return;
+    refreshTimer = setTimeout(pollingLoop, REFRESH_MS);
+}
+
 function startPolling() {
-    if (refreshTimer != null) return;
-    refreshTimer = setInterval(pollingTick, REFRESH_MS);
+    if (pollingActive) return;
+    pollingActive = true;
+    refreshTimer = setTimeout(pollingLoop, REFRESH_MS);
 }
 
 function stopPolling() {
-    if (refreshTimer == null) return;
-    clearInterval(refreshTimer);
-    refreshTimer = null;
+    pollingActive = false;
+    if (refreshTimer != null) {
+        clearTimeout(refreshTimer);
+        refreshTimer = null;
+    }
 }
 
 document.addEventListener("visibilitychange", () => {

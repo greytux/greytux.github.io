@@ -42,8 +42,39 @@ function loadFavoritesFromStorage() {
 // Favoritas persistidas (las que viven en la pestaña "Favoritas")
 export const FAVORITES = loadFavoritesFromStorage();
 
-// Paradas dinámicas en sesión (las que se añaden desde "Mis paradas")
-export const DYNAMIC_STOPS = [];
+// "Mis paradas" persistidas (clave separada para no mezclar con favoritas)
+const DYNAMIC_STORAGE_KEY = "greytux:dynamic-stops:v1";
+
+function sanitizeDynamic(s) {
+    if (!s || !Number.isFinite(s.id)) return null;
+    const clean = { id: s.id };
+    if (typeof s.label === "string" && s.label.trim()) {
+        clean.label = s.label.trim();
+    }
+    return clean;
+}
+
+function loadDynamicStopsFromStorage() {
+    try {
+        const raw = localStorage.getItem(DYNAMIC_STORAGE_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return [];
+        return parsed.map(sanitizeDynamic).filter(Boolean);
+    } catch {
+        return [];
+    }
+}
+
+function persistDynamicStops() {
+    try {
+        localStorage.setItem(DYNAMIC_STORAGE_KEY, JSON.stringify(DYNAMIC_STOPS));
+    } catch (e) {
+        console.warn("No se pudo guardar Mis paradas en localStorage", e);
+    }
+}
+
+export const DYNAMIC_STOPS = loadDynamicStopsFromStorage();
 
 // Lista combinada que se usa para el polling. Se mantiene como referencia
 // estable para que los módulos que importan STOPS sigan funcionando.
@@ -98,9 +129,20 @@ export function moveFavorite(id, direction) {
 }
 
 export function addDynamicStop(stop) {
-    if (!stop || !Number.isFinite(stop.id)) return false;
-    if (STOPS.some(s => s.id === stop.id)) return false;
-    DYNAMIC_STOPS.push(stop);
+    const clean = sanitizeDynamic(stop);
+    if (!clean) return false;
+    if (STOPS.some(s => s.id === clean.id)) return false;
+    DYNAMIC_STOPS.push(clean);
+    persistDynamicStops();
+    syncStops();
+    return true;
+}
+
+export function removeDynamicStop(id) {
+    const i = DYNAMIC_STOPS.findIndex(s => s.id === id);
+    if (i === -1) return false;
+    DYNAMIC_STOPS.splice(i, 1);
+    persistDynamicStops();
     syncStops();
     return true;
 }

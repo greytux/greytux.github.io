@@ -95,7 +95,9 @@ async function login() {
 }
 
 // --- LLEGADAS PARADA ---
-export async function getArrivals(stopId) {
+const MAX_AUTH_RETRIES = 1;
+
+export async function getArrivals(stopId, _retries = 0) {
     if (isApiInCooldown()) {
         throw new Error("API_COOLDOWN");
     }
@@ -133,9 +135,9 @@ export async function getArrivals(stopId) {
     }
 
     if (json.code !== "00") {
-        if (json.code === "01" || json.code === "02") {
+        if ((json.code === "01" || json.code === "02") && _retries < MAX_AUTH_RETRIES) {
             invalidateToken();
-            return getArrivals(stopId);
+            return getArrivals(stopId, _retries + 1);
         }
         throw new Error("Error API arrives (" + stopId + "): " + (json.description || json.code));
     }
@@ -252,7 +254,7 @@ export async function fetchStopCoords(stopId) {
 }
 
 // --- PARADAS CERCANAS ---
-export async function getNearbyStops() {
+export async function getNearbyStops(_retries = 0) {
     if (isApiInCooldown()) {
         throw new Error("API_COOLDOWN");
     }
@@ -300,9 +302,9 @@ export async function getNearbyStops() {
     }
 
     if (json.code !== "00") {
-        if (json.code === "01" || json.code === "02") {
+        if ((json.code === "01" || json.code === "02") && _retries < MAX_AUTH_RETRIES) {
             invalidateToken();
-            return getNearbyStops();
+            return getNearbyStops(_retries + 1);
         }
         throw new Error("Error API paradas cercanas: " + (json.description || json.code));
     }
