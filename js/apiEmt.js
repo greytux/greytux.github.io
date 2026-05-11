@@ -215,18 +215,33 @@ export async function fetchStopCoords(stopId) {
         return null;
     }
 
+    // EMT devuelve la información de la parada en varias formas posibles:
+    //   1) json.data[0].stops[0]   (la forma más común)
+    //   2) json.data[0].Stops[0]   (variante de mayúsculas)
+    //   3) json.data[0]            (a veces el stop está directamente)
+    // También las coordenadas pueden venir en geometry.coordinates [lon,lat] o
+    // en campos planos longitude/latitude.
+    let stopObj = null;
+    if (Array.isArray(json.data) && json.data.length > 0) {
+        const d0 = json.data[0];
+        if (d0 && Array.isArray(d0.stops) && d0.stops.length > 0) {
+            stopObj = d0.stops[0];
+        } else if (d0 && Array.isArray(d0.Stops) && d0.Stops.length > 0) {
+            stopObj = d0.Stops[0];
+        } else if (
+            d0 &&
+            typeof d0 === "object" &&
+            (d0.geometry || d0.longitude != null || d0.latitude != null ||
+             d0.stopId != null || d0.IdStop != null)
+        ) {
+            stopObj = d0;
+        }
+    }
+
     let lat = null;
     let lon = null;
 
-    if (
-        Array.isArray(json.data) &&
-        json.data.length > 0 &&
-        json.data[0].stops &&
-        Array.isArray(json.data[0].stops) &&
-        json.data[0].stops.length > 0
-    ) {
-        const stopObj = json.data[0].stops[0];
-
+    if (stopObj) {
         if (
             stopObj.geometry &&
             Array.isArray(stopObj.geometry.coordinates) &&
@@ -235,6 +250,18 @@ export async function fetchStopCoords(stopId) {
             const coords = stopObj.geometry.coordinates;
             lon = parseFloat(coords[0]); // [lon, lat]
             lat = parseFloat(coords[1]);
+        }
+
+        // Fallback: longitude/latitude planos
+        if ((lat == null || Number.isNaN(lat)) &&
+            stopObj.latitude != null &&
+            Number.isFinite(parseFloat(stopObj.latitude))) {
+            lat = parseFloat(stopObj.latitude);
+        }
+        if ((lon == null || Number.isNaN(lon)) &&
+            stopObj.longitude != null &&
+            Number.isFinite(parseFloat(stopObj.longitude))) {
+            lon = parseFloat(stopObj.longitude);
         }
 
         const lines = getStopLinesFromRawStop(stopObj);
@@ -249,7 +276,10 @@ export async function fetchStopCoords(stopId) {
         return STOP_COORDS[stopId];
     }
 
-    console.warn("No se han podido extraer coords válidas para la parada", stopId);
+    console.warn(
+        "No se han podido extraer coords válidas para la parada", stopId,
+        "— estructura recibida:", json
+    );
     return null;
 }
 

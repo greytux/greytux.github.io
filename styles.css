@@ -175,14 +175,18 @@ h1 {
 
 .tab-btn {
     flex: 1;
+    min-width: 0;
     border: none;
-    padding: 6px 8px;
-    font-size: 12px;
+    padding: 5px 4px;
+    font-size: 10px;
     border-radius: 999px;
     cursor: pointer;
     background: transparent;
     color: var(--muted);
     font-weight: 500;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
 }
 
 .tab-btn.active {
@@ -884,19 +888,23 @@ h1 {
 .alarm-form .alarm-line {
     flex: 1;
     min-width: 0;
-    padding: 5px 8px;
+    padding: 4px 10px;
     border: 1px solid #cbd5e1;
     border-radius: 999px;
-    font-size: 12px;
+    /* font-size: 16px evita que iOS Safari haga zoom al enfocar */
+    font-size: 16px;
+    line-height: 1.2;
     outline: none;
 }
 
 .alarm-form .alarm-threshold {
-    width: 64px;
-    padding: 5px 8px;
+    width: 72px;
+    padding: 4px 10px;
     border: 1px solid #cbd5e1;
     border-radius: 999px;
-    font-size: 12px;
+    /* font-size: 16px evita que iOS Safari haga zoom al enfocar */
+    font-size: 16px;
+    line-height: 1.2;
     outline: none;
 }
 
