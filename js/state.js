@@ -7,8 +7,8 @@ export const BASE_URL_V1 = "https://openapi.emtmadrid.es/v1";
 const FAVORITES_STORAGE_KEY = "greytux:favorites:v1";
 const DEFAULT_FAVORITES = [
     { id: 3224, label: "Herrera Oria - Labastida - Parada 3224" },
-    { id: 2677, label: "Fuente de la Carra - Parada 2677", filterLines: ["66", "137"] },
-    { id: 93, label: "La Vaguada - Parada 93", filterLines: ["83"] }
+    { id: 2677, label: "Fuente de la Carra - Parada 2677" },
+    { id: 93, label: "La Vaguada - Parada 93" }
 ];
 
 function sanitizeFavorite(s) {

@@ -16,6 +16,10 @@ import {
 
 import { openCoordPicker } from "./coordPicker.js";
 
+import { estimateWalk, computeVerdict } from "./walkTime.js";
+
+import { getDelayInfo } from "./etaTracker.js";
+
 import {
     getArrivals,
     fetchStopCoords
@@ -100,7 +104,10 @@ export function renderStop(stopConfig, arrivals) {
 
     const statusText = statusWrapper.querySelector("span:nth-child(2)");
 
-    if (walkEl) walkEl.textContent = "";
+    if (walkEl) {
+        walkEl.textContent = "";
+        walkEl.className = "walk-time";
+    }
     listEl.innerHTML = "";
 
     let filtered = arrivals;
@@ -125,6 +132,49 @@ export function renderStop(stopConfig, arrivals) {
             reachEl.textContent = `Próximo bus en ~${nextBusMinutes} min.`;
         } else {
             reachEl.textContent = "";
+        }
+    }
+
+    // ¿Llego a tiempo? Calculamos tiempo andando + veredicto si tenemos las
+    // coords del usuario y de la parada.
+    if (walkEl) {
+        const stopCoords = STOP_COORDS[id];
+        if (userLocation && stopCoords) {
+            const walk = estimateWalk({
+                userLat: userLocation.lat,
+                userLon: userLocation.lon,
+                stopLat: stopCoords.lat,
+                stopLon: stopCoords.lon
+            });
+            const walkMin = Math.max(1, Math.round(walk.walkSec / 60));
+
+            const busSecs = filtered
+                .map(a => a.estimateArrive)
+                .filter(s => s != null)
+                .sort((x, y) => x - y);
+
+            const verdict = walk.realistic
+                ? computeVerdict({ walkSec: walk.walkSec, busSecs })
+                : null;
+
+            let text = `🚶 ${walkMin} min andando`;
+            let kindClass = "";
+
+            if (verdict) {
+                const icon =
+                    verdict.kind === "comfortable" ? "✓"
+                    : verdict.kind === "tight" ? "⚠"
+                    : verdict.kind === "urgent" ? "⚡"
+                    : verdict.kind === "miss-catch-next" ? "→"
+                    : "⛔";
+                text += ` · ${icon} ${verdict.text}`;
+                kindClass = `verdict-${verdict.kind}`;
+            } else if (!walk.realistic) {
+                text += " · parada lejana";
+            }
+
+            walkEl.textContent = text;
+            walkEl.className = `walk-time ${kindClass}`.trim();
         }
     }
 
@@ -158,6 +208,8 @@ export function renderStop(stopConfig, arrivals) {
                 ? Math.round(arr.estimateArrive / 60)
                 : null;
 
+            const delay = getDelayInfo(id, arr);
+
             let className = "bus-item";
             if (minutes != null) {
                 if (minutes < 3) {
@@ -166,6 +218,7 @@ export function renderStop(stopConfig, arrivals) {
                     className += " soon";
                 }
             }
+            if (delay) className += " delayed";
             li.className = className;
 
             const left = document.createElement("div");
@@ -177,10 +230,18 @@ export function renderStop(stopConfig, arrivals) {
 
             const textBlock = document.createElement("div");
             textBlock.className = "bus-text";
+
+            const distancePart = arr.DistanceBus != null
+                ? `${arr.DistanceBus} m`
+                : "-";
+            const delayPart = delay
+                ? `<span class="bus-delay ${delay.severity === "high" ? "bus-delay-high" : ""}">⏰ +${delay.slipMin} min retraso</span>`
+                : "";
+
             textBlock.innerHTML = `
         <div class="bus-main">${arr.destination || "Destino no disponible"}</div>
         <div class="bus-sub">
-          Distancia aprox bus-parada: ${arr.DistanceBus != null ? arr.DistanceBus + " m" : "-"}
+          Bus a ${distancePart}${delayPart ? " · " + delayPart : ""}
         </div>
       `;
 

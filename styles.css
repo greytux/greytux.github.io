@@ -365,6 +365,40 @@ h1 {
     font-size: 11px;
     color: var(--muted);
     margin-top: 6px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    line-height: 1.35;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+/* Veredictos "¿Llego?" — codifica la decisión por color */
+.walk-time.verdict-comfortable {
+    background: #dcfce7;
+    color: #14532d;
+    font-weight: 500;
+}
+
+.walk-time.verdict-tight {
+    background: #fef3c7;
+    color: #78350f;
+    font-weight: 500;
+}
+
+.walk-time.verdict-urgent {
+    background: #fed7aa;
+    color: #7c2d12;
+    font-weight: 600;
+}
+
+.walk-time.verdict-miss-catch-next {
+    background: #e0e7ff;
+    color: #1e3a8a;
+    font-weight: 500;
+}
+
+.walk-time.verdict-miss {
+    background: #f3f4f6;
+    color: #6b7280;
 }
 
 .reach-time {
@@ -404,6 +438,19 @@ h1 {
 .bus-item.urgent {
     border-color: #fecaca;
     background: var(--urgent);
+}
+
+.bus-item.delayed {
+    border-left: 3px solid #b45309;
+}
+
+.bus-delay {
+    color: #b45309;
+    font-weight: 600;
+}
+
+.bus-delay.bus-delay-high {
+    color: #b91c1c;
 }
 
 .bus-left {
@@ -713,6 +760,93 @@ h1 {
     font-size: 11px;
     color: #b91c1c;
     min-height: 14px;
+}
+
+/* ---- Atajos rápidos (Casa / Trabajo) ---- */
+#shortcuts-config {
+    padding: 0 12px;
+}
+
+.shortcuts-details {
+    margin: 0 0 10px;
+    background: #eef2ff;
+    border: 1px solid #c7d2fe;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.shortcuts-summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #1e3a8a;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.shortcuts-summary::-webkit-details-marker {
+    display: none;
+}
+
+.shortcuts-meta {
+    font-size: 11px;
+    font-weight: 500;
+    color: #4338ca;
+    opacity: 0.85;
+}
+
+.shortcuts-form {
+    padding: 4px 12px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.shortcuts-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.shortcuts-label {
+    font-size: 11px;
+    color: #1e3a8a;
+    font-weight: 600;
+    min-width: 80px;
+}
+
+.shortcuts-select {
+    flex: 1;
+    min-width: 0;
+    padding: 5px 8px;
+    border: 1px solid #c7d2fe;
+    border-radius: 999px;
+    font-size: 13px;
+    background: #fff;
+    outline: none;
+}
+
+.shortcuts-select:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 1px rgba(37,99,235,0.35);
+}
+
+.shortcuts-help {
+    margin-top: 4px;
+    font-size: 10px;
+    color: #4338ca;
+    line-height: 1.4;
+}
+
+.shortcuts-help code {
+    background: #c7d2fe;
+    padding: 1px 4px;
+    border-radius: 4px;
+    font-size: 10px;
 }
 
 /* ---- Mapa (pestaña Mapa con Leaflet) ---- */

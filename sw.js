@@ -3,7 +3,7 @@
 // - NO cachea llamadas a la API EMT: deben ir siempre a red para no
 //   mostrar tiempos de bus rancios.
 
-const CACHE_VERSION = "turrobuses-shell-v6";
+const CACHE_VERSION = "turrobuses-shell-v8";
 const SHELL_ASSETS = [
     "./",
     "./index.html",
@@ -17,7 +17,10 @@ const SHELL_ASSETS = [
     "./js/toast.js",
     "./js/alarms.js",
     "./js/map.js",
-    "./js/coordPicker.js"
+    "./js/coordPicker.js",
+    "./js/walkTime.js",
+    "./js/etaTracker.js",
+    "./js/shortcuts.js"
 ];
 
 self.addEventListener("install", (event) => {

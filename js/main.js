@@ -35,6 +35,11 @@ import {
     refreshMapMarkers
 } from "./map.js";
 
+import {
+    renderShortcutsConfig,
+    consumeUrlIntent
+} from "./shortcuts.js";
+
 // Util para normalizar número de línea (quita ceros a la izquierda)
 function normalizeLine(l) {
     if (l == null) return "";
@@ -152,9 +157,13 @@ async function refreshAll() {
 
 // ---- Listeners básicos ----
 setupAccordionListeners();              // No-op (compat); favoritas dinámicas se montan abajo
+renderShortcutsConfig();                // Config Casa/Trabajo en Favoritas
 renderFavorites();                      // Pinta favoritas desde localStorage
 renderDynamicStops(normalizeLine);      // Pinta Mis paradas desde localStorage
 initSlider();                           // Tabs + swipe
+
+// Procesar intents desde URL (?parada=NNNN o ?atajo=casa|trabajo)
+consumeUrlIntent({ toast });
 
 // Inicializar mapa la primera vez que se active su pestaña (lazy)
 const mapTabBtn = document.querySelector('.tab-btn[data-index="3"]');
