@@ -1,17 +1,15 @@
 import {
     STOPS,
     FAVORITES,
-    DYNAMIC_STOPS,
     STOP_COORDS,
     STOP_LINES,
     nearbyLineFilter,
+    favoritesLineFilter,
     userLocation,
     addFavorite,
     removeFavorite,
     moveFavorite,
-    setFavoriteCoords,
-    addDynamicStop,
-    removeDynamicStop
+    setFavoriteCoords
 } from "./state.js";
 
 import { openCoordPicker } from "./coordPicker.js";
@@ -22,8 +20,15 @@ import { getDelayInfo } from "./etaTracker.js";
 
 import {
     getArrivals,
-    fetchStopCoords
+    fetchStopCoords,
+    getStopLinesFromRawStop
 } from "./apiEmt.js";
+
+// Normaliza el número de línea (quita ceros a la izquierda) para comparar.
+function normLine(l) {
+    if (l == null) return "";
+    return String(l).trim().replace(/^0+/, "");
+}
 
 import { toast, confirmDialog } from "./toast.js";
 
@@ -112,9 +117,8 @@ export function renderStop(stopConfig, arrivals) {
 
     let filtered = arrivals;
     if (filterLines && filterLines.length) {
-        filtered = arrivals.filter(a =>
-            filterLines.includes(String(a.line).trim())
-        );
+        const wanted = filterLines.map(normLine);
+        filtered = arrivals.filter(a => wanted.includes(normLine(a.line)));
     }
 
     let nextBusMinutes = null;
@@ -552,71 +556,73 @@ export async function renderNearbyStops(stops) {
     const nearbyAccordionEl = document.getElementById("nearby-accordion");
     if (!nearbyAccordionEl) return;
 
+    // Recordar qué acordeones estaban abiertos (antes de tocar el DOM)
     const prevOpenIds = new Set();
-    const prevItems = nearbyAccordionEl.querySelectorAll(".accordion-item.open");
-    prevItems.forEach(item => {
-        const id = item.dataset.stopId;
-        if (id) prevOpenIds.add(String(id));
+    nearbyAccordionEl.querySelectorAll(".accordion-item.open").forEach(item => {
+        if (item.dataset.stopId) prevOpenIds.add(String(item.dataset.stopId));
     });
 
-    nearbyAccordionEl.innerHTML = "";
-
-    if (!stops || !stops.length) {
+    const showMessage = (text) => {
+        nearbyAccordionEl.innerHTML = "";
         const div = document.createElement("div");
         div.className = "empty";
-        div.textContent = "Sin paradas cercanas en el radio seleccionado.";
+        div.textContent = text;
         nearbyAccordionEl.appendChild(div);
+    };
+
+    if (!stops || !stops.length) {
+        showMessage("Sin paradas cercanas en el radio seleccionado.");
         return;
     }
 
     const baseIds = new Set(STOPS.map(s => String(s.id)));
-
-    const filtered = stops
+    let candidates = stops
         .map(stop => {
             const stopId =
-                stop.stopId ??
-                stop.IdStop ??
-                stop.idStop ??
-                stop.id ??
-                stop.stopNum ??
-                null;
+                stop.stopId ?? stop.IdStop ?? stop.idStop ?? stop.id ?? stop.stopNum ?? null;
             return { raw: stop, stopId };
         })
         .filter(s => s.stopId != null && !baseIds.has(String(s.stopId)));
 
-    if (!filtered.length) {
-        const div = document.createElement("div");
-        div.className = "empty";
-        div.textContent = "Las paradas cercanas ya están entre tus paradas favoritas o añadidas.";
-        nearbyAccordionEl.appendChild(div);
+    if (!candidates.length) {
+        showMessage("Las paradas cercanas ya están entre tus favoritas.");
         return;
     }
 
-    const topN = filtered.slice(0, 34);
-    const stopConfigs = [];
+    const filterActive = !!nearbyLineFilter;
 
-    for (const { raw: stop, stopId } of topN) {
+    // Pre-filtro estático por líneas servidas: descartamos de entrada las
+    // paradas que no tienen la línea (ni se piden sus llegadas). Las de líneas
+    // desconocidas se mantienen y se deciden tras pedir las llegadas.
+    if (filterActive) {
+        candidates = candidates.filter(({ raw }) => {
+            const served = getStopLinesFromRawStop(raw);
+            return served.length === 0 || served.includes(nearbyLineFilter);
+        });
+        if (!candidates.length) {
+            showMessage(`Ninguna parada cercana tiene la línea ${nearbyLineFilter}.`);
+            return; // cero fetch, cero refresco
+        }
+    }
+
+    const topN = candidates.slice(0, 34);
+
+    // Cachear coords de las candidatas (barato, síncrono)
+    topN.forEach(({ raw, stopId }) => {
         const idNum = parseInt(stopId, 10);
-        const name =
-            stop.name ??
-            stop.stopName ??
-            stop.StopName ??
-            `Parada ${idNum}`;
-
-        if (stop.geometry && Array.isArray(stop.geometry.coordinates)) {
-            const coords = stop.geometry.coordinates;
-            const lon = parseFloat(coords[0]);
-            const lat = parseFloat(coords[1]);
+        if (raw.geometry && Array.isArray(raw.geometry.coordinates)) {
+            const lon = parseFloat(raw.geometry.coordinates[0]);
+            const lat = parseFloat(raw.geometry.coordinates[1]);
             if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
                 STOP_COORDS[idNum] = { lat, lon };
             }
         }
+    });
 
-        const cfg = { id: idNum };
-        if (nearbyLineFilter) {
-            cfg.filterLines = [nearbyLineFilter];
-        }
+    const nameOf = (raw, idNum) =>
+        raw.name ?? raw.stopName ?? raw.StopName ?? `Parada ${idNum}`;
 
+    const buildArticle = (idNum, name, cfg, arrivals) => {
         const article = buildStopAccordionElement(cfg, {
             title: name,
             subtitle: `Parada ${idNum} · Cercana a tu ubicación`,
@@ -636,14 +642,95 @@ export async function renderNearbyStops(stops) {
                 }
             ]
         });
-
         nearbyAccordionEl.appendChild(article);
         updateLocationLink(idNum);
         renderAlarmsForStop(idNum);
-        stopConfigs.push(cfg);
+        if (arrivals !== undefined) renderStop(cfg, arrivals);
+    };
+
+    if (filterActive) {
+        // Fetch-first: pedimos llegadas y solo pintamos las paradas que tienen
+        // un bus de la línea ahora mismo. Sin acordeones vacíos ni parpadeo:
+        // el listado anterior permanece visible hasta tener los datos nuevos.
+        const results = await Promise.all(topN.map(async ({ raw, stopId }) => {
+            const idNum = parseInt(stopId, 10);
+            let arrivals = [];
+            try {
+                arrivals = await getArrivals(idNum);
+            } catch (e) {
+                /* ignoramos esta parada en este ciclo */
+            }
+            const has = arrivals.some(a =>
+                a.estimateArrive != null && normLine(a.line) === nearbyLineFilter
+            );
+            return { raw, idNum, arrivals, has };
+        }));
+
+        const visible = results.filter(r => r.has);
+        nearbyAccordionEl.innerHTML = "";
+        if (!visible.length) {
+            showMessage(
+                `No hay buses de la línea ${nearbyLineFilter} en paradas cercanas ahora mismo.`
+            );
+            return;
+        }
+        visible.forEach(({ raw, idNum, arrivals }) => {
+            const cfg = { id: idNum, filterLines: [nearbyLineFilter] };
+            buildArticle(idNum, nameOf(raw, idNum), cfg, arrivals);
+        });
+        return;
     }
 
+    // Sin filtro: comportamiento normal (construir todos + refrescar)
+    nearbyAccordionEl.innerHTML = "";
+    const stopConfigs = [];
+    for (const { raw, stopId } of topN) {
+        const idNum = parseInt(stopId, 10);
+        const cfg = { id: idNum };
+        buildArticle(idNum, nameOf(raw, idNum), cfg, undefined);
+        stopConfigs.push(cfg);
+    }
     await Promise.all(stopConfigs.map(cfg => refreshStop(cfg)));
+}
+
+// Aplica el filtro de línea de Favoritas: oculta las favoritas que no tienen
+// la línea (por líneas servidas conocidas) o que ahora mismo no muestran ningún
+// bus de esa línea. Se llama tras cada refresco y al teclear en el filtro.
+export function applyFavoritesFilter() {
+    const container = document.getElementById("favorites-stops");
+    if (!container) return;
+
+    const f = favoritesLineFilter;
+    const msgEl = document.getElementById("fav-filter-message");
+
+    if (!f) {
+        container.querySelectorAll(".accordion-item").forEach(a => {
+            a.style.display = "";
+        });
+        if (msgEl) msgEl.textContent = "";
+        return;
+    }
+
+    let anyVisible = false;
+    container.querySelectorAll(".accordion-item").forEach(article => {
+        const id = parseInt(article.dataset.stopId, 10);
+        const served = STOP_LINES[id];
+        let show;
+        if (Array.isArray(served) && served.length && !served.includes(f)) {
+            show = false; // la línea no pasa por esta parada
+        } else {
+            const busList = document.getElementById(`buses-${id}`);
+            show = !!(busList && busList.querySelector(".bus-item"));
+        }
+        article.style.display = show ? "" : "none";
+        if (show) anyVisible = true;
+    });
+
+    if (msgEl) {
+        msgEl.textContent = anyVisible
+            ? ""
+            : `Ninguna favorita con buses de la línea ${f} ahora mismo.`;
+    }
 }
 
 // ---- ACCORDIÓN ESTÁTICO (compat — ya no hay favoritas estáticas, pero se conserva por si acaso) ----
@@ -652,137 +739,5 @@ export function setupAccordionListeners() {
     // Mantenemos la función para que no rompa imports antiguos.
 }
 
-// ---- PARADAS DINÁMICAS ("Mis paradas") ----
-export function renderDynamicStops(normalizeLineFn) {
-    const container = document.getElementById("dynamic-stops");
-    if (!container) return;
-
-    // Mantener qué acordeones estaban abiertos
-    const prevOpen = new Set();
-    container.querySelectorAll(".accordion-item.open").forEach(item => {
-        if (item.dataset.stopId) prevOpen.add(item.dataset.stopId);
-    });
-
-    container.innerHTML = "";
-
-    if (!DYNAMIC_STOPS.length) {
-        return;
-    }
-
-    DYNAMIC_STOPS.forEach(stop => {
-        const wasOpen = prevOpen.size === 0 || prevOpen.has(String(stop.id));
-
-        const article = buildStopAccordionElement(stop, {
-            title: `Parada ${stop.id}`,
-            subtitle: `Número de parada ${stop.id}`,
-            open: wasOpen,
-            actions: [
-                {
-                    icon: "★",
-                    title: "Añadir a favoritas",
-                    onClick: async () => {
-                        const fav = { id: stop.id, label: `Parada ${stop.id}` };
-                        if (addFavorite(fav)) {
-                            // También quitarla de Mis paradas para no duplicar polling
-                            removeDynamicStop(stop.id);
-                            await renderFavorites();
-                            renderDynamicStops(normalizeLineFn);
-                            await refreshStop(fav);
-                            toast(`Parada ${stop.id} movida a favoritas.`, { type: "success" });
-                        } else {
-                            toast(`La parada ${stop.id} ya está en favoritas.`, { type: "warn" });
-                        }
-                    }
-                },
-                {
-                    icon: "✕",
-                    title: "Quitar de Mis paradas",
-                    danger: true,
-                    onClick: async () => {
-                        const ok = await confirmDialog(
-                            `¿Quitar la parada ${stop.id} de Mis paradas?`,
-                            { okText: "Quitar", danger: true }
-                        );
-                        if (!ok) return;
-                        removeDynamicStop(stop.id);
-                        renderDynamicStops(normalizeLineFn);
-                        toast(`Parada ${stop.id} quitada.`, { type: "success" });
-                    }
-                }
-            ]
-        });
-
-        container.appendChild(article);
-        updateLocationLink(stop.id);
-        renderAlarmsForStop(stop.id);
-    });
-
-    // Reaplicar filtro de línea si hay
-    const myLineInput = document.getElementById("my-line-input");
-    if (myLineInput && normalizeLineFn && myLineInput.value.trim()) {
-        filterMyStopsByLine(myLineInput.value.trim(), normalizeLineFn);
-    }
-}
-
-export async function createDynamicStopAccordion(stopId, normalizeLineFn) {
-    if (STOPS.some(s => s.id === stopId)) {
-        const existing = document.querySelector(
-            `.accordion-item[data-stop-id="${stopId}"]`
-        );
-        if (existing) {
-            existing.classList.add("open");
-        }
-        await refreshStop({ id: stopId });
-        return;
-    }
-
-    let arrivals;
-    try {
-        arrivals = await getArrivals(stopId);
-    } catch (err) {
-        console.error(err);
-        toast(
-            `No se ha podido obtener información para la parada ${stopId}. Comprueba el número.`,
-            { type: "error", duration: 5000 }
-        );
-        return;
-    }
-
-    const stopConfig = { id: stopId, label: `Parada ${stopId}` };
-    if (!addDynamicStop(stopConfig)) return;
-
-    try {
-        await fetchStopCoords(stopId);
-    } catch (e) {
-        console.warn("No se pudieron obtener coords para la parada dinámica", stopId);
-    }
-
-    // Re-render completo de Mis paradas (incluye la nueva), y aprovechamos
-    // los arrivals ya obtenidos para pintar inmediatamente la parada recién
-    // creada sin esperar otra llamada al endpoint.
-    renderDynamicStops(normalizeLineFn);
-    renderStop(stopConfig, arrivals);
-}
-
-// ---- Filtro "mis paradas" ----
-export function filterMyStopsByLine(filterVal, normalizeLineFn) {
-    const normalized = filterVal ? normalizeLineFn(filterVal) : "";
-    const dynamicStopsContainer = document.getElementById("dynamic-stops");
-    if (!dynamicStopsContainer) return;
-
-    const items = dynamicStopsContainer.querySelectorAll(".accordion-item");
-
-    items.forEach(item => {
-        const stopId = parseInt(item.dataset.stopId, 10);
-        if (!normalized) {
-            item.style.display = "";
-            return;
-        }
-        const lines = STOP_LINES[stopId] || [];
-        if (lines.some(l => l === normalized)) {
-            item.style.display = "";
-        } else {
-            item.style.display = "none";
-        }
-    });
-}
+// Las paradas se gestionan ahora únicamente desde Favoritas; "Mis paradas"
+// se ha eliminado para no duplicar funcionalidad (ver renderFavorites).

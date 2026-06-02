@@ -649,10 +649,6 @@ h1 {
     margin-top: 4px;
 }
 
-#dynamic-stops {
-    margin-top: 10px;
-}
-
 .nearby-section {
     margin-top: 10px;
     padding: 10px 12px 12px;
@@ -895,7 +891,6 @@ h1 {
 }
 
 .map-legend-fav   { background: #f59e0b; }
-.map-legend-dyn   { background: #2563eb; }
 .map-legend-near  { background: #94a3b8; }
 .map-legend-user  { background: #ef4444; }
 
@@ -915,7 +910,6 @@ h1 {
 }
 
 .stop-marker-fav  { background: #f59e0b; }
-.stop-marker-dyn  { background: #2563eb; }
 .stop-marker-near { background: #94a3b8; }
 
 /* Popup del marker */

@@ -4,7 +4,9 @@ import {
     nearbyStopsCache,
     setNearbyStopsCache,
     isApiInCooldown,
-    setNearbyLineFilter
+    setNearbyLineFilter,
+    favoritesLineFilter,
+    setFavoritesLineFilter
 } from "./state.js";
 
 import {
@@ -17,11 +19,9 @@ import {
     setupAccordionListeners,
     refreshStop,
     renderNearbyStops,
-    createDynamicStopAccordion,
-    filterMyStopsByLine,
     renderFavorites,
-    renderDynamicStops,
-    handleAddFavorite
+    handleAddFavorite,
+    applyFavoritesFilter
 } from "./uiStops.js";
 
 import { initSlider } from "./slider.js";
@@ -50,20 +50,16 @@ function normalizeLine(l) {
 const globalStatusEl = document.getElementById("last-update-global");
 const refreshBtn      = document.getElementById("refresh-now");
 
-const addStopForm     = document.getElementById("add-stop-form");
-const stopIdInput     = document.getElementById("stop-id-input");
-
 const addFavoriteForm = document.getElementById("add-favorite-form");
 const favIdInput      = document.getElementById("fav-id-input");
 const favLinesInput   = document.getElementById("fav-lines-input");
 
 const nearbyStatusEl  = document.getElementById("nearby-status");
 const nearbyLineInput = document.getElementById("nearby-line-input");
-const nearbyApplyBtn  = document.getElementById("nearby-apply");
 const nearbyClearBtn  = document.getElementById("nearby-clear");
 const nearbyMsgEl     = document.getElementById("nearby-filter-message");
 
-const myLineInput     = document.getElementById("my-line-input");
+const favLineInput    = document.getElementById("fav-line-input");
 
 // --- Refresh paradas cercanas (wrapper con texto + cache) ---
 async function refreshNearbyStopsWrapper() {
@@ -133,10 +129,20 @@ async function refreshAll() {
         );
     }
 
-    // 3) Refrescar solo las paradas con acordeón abierto. Las cerradas se
-    //    refrescarán en el momento de abrirlas (ver header click handler).
-    const openStops = STOPS.filter(s => isStopAccordionOpen(s.id));
-    await Promise.all(openStops.map(stop => refreshStop(stop)));
+    // 3) Refrescar favoritas. Normalmente solo las que tienen el acordeón
+    //    abierto (las cerradas se refrescan al abrirlas). Pero si hay un filtro
+    //    por línea activo, refrescamos todas para poder decidir cuáles tienen
+    //    bus de esa línea y ocultar el resto.
+    const favFilter = favoritesLineFilter;
+    const favsToRefresh = favFilter
+        ? STOPS
+        : STOPS.filter(s => isStopAccordionOpen(s.id));
+    await Promise.all(
+        favsToRefresh.map(stop =>
+            refreshStop(favFilter ? { ...stop, filterLines: [favFilter] } : stop)
+        )
+    );
+    applyFavoritesFilter();
 
     // 4) Paradas cercanas
     await refreshNearbyStopsWrapper();
@@ -159,14 +165,13 @@ async function refreshAll() {
 setupAccordionListeners();              // No-op (compat); favoritas dinámicas se montan abajo
 renderShortcutsConfig();                // Config Casa/Trabajo en Favoritas
 renderFavorites();                      // Pinta favoritas desde localStorage
-renderDynamicStops(normalizeLine);      // Pinta Mis paradas desde localStorage
-initSlider();                           // Tabs + swipe
+initSlider();                           // Tabs
 
 // Procesar intents desde URL (?parada=NNNN o ?atajo=casa|trabajo)
 consumeUrlIntent({ toast });
 
 // Inicializar mapa la primera vez que se active su pestaña (lazy)
-const mapTabBtn = document.querySelector('.tab-btn[data-index="3"]');
+const mapTabBtn = document.querySelector('.tab-btn[data-index="2"]');
 if (mapTabBtn) {
     mapTabBtn.addEventListener("click", () => {
         ensureMapInitialized();
@@ -211,65 +216,27 @@ if (addFavoriteForm && favIdInput) {
     });
 }
 
-// Formulario "Mis paradas" (añadir parada)
-if (addStopForm && stopIdInput) {
-    addStopForm.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const raw = stopIdInput.value.trim();
-        if (!raw) return;
-
-        const stopId = parseInt(raw, 10);
-        if (Number.isNaN(stopId) || stopId <= 0) {
-            toast("Introduce un número de parada válido.", { type: "error" });
-            return;
-        }
-
-        await createDynamicStopAccordion(stopId, normalizeLine);
-        stopIdInput.value = "";
+// Filtro "Favoritas por línea" — en vivo (con debounce para no refrescar por tecla)
+if (favLineInput) {
+    let favFilterTimer = null;
+    favLineInput.addEventListener("input", () => {
+        setFavoritesLineFilter(normalizeLine(favLineInput.value.trim()));
+        applyFavoritesFilter();              // respuesta instantánea con lo ya conocido
+        clearTimeout(favFilterTimer);
+        favFilterTimer = setTimeout(() => refreshAll(), 500); // refina pidiendo llegadas
     });
 }
 
-// Filtro "Mis paradas por línea"
-if (myLineInput) {
-    myLineInput.addEventListener("input", () => {
-        filterMyStopsByLine(myLineInput.value.trim(), normalizeLine);
-    });
-}
-
-// Filtro "Paradas cercanas por línea" (aplicar / quitar)
-if (nearbyApplyBtn && nearbyLineInput) {
-    nearbyApplyBtn.addEventListener("click", () => {
-        const raw = nearbyLineInput.value.trim();
-
-        if (!raw) {
-            setNearbyLineFilter("");
-            if (nearbyMsgEl) nearbyMsgEl.textContent = "";
+// Filtro "Paradas cercanas por línea" — en vivo (con debounce)
+if (nearbyLineInput) {
+    let nearbyFilterTimer = null;
+    nearbyLineInput.addEventListener("input", () => {
+        setNearbyLineFilter(normalizeLine(nearbyLineInput.value.trim()));
+        if (nearbyMsgEl) nearbyMsgEl.textContent = "";
+        clearTimeout(nearbyFilterTimer);
+        nearbyFilterTimer = setTimeout(() => {
             renderNearbyStops(nearbyStopsCache);
-            return;
-        }
-
-        setNearbyLineFilter(normalizeLine(raw));
-
-        renderNearbyStops(nearbyStopsCache).then(() => {
-            let anyMatch = false;
-            document
-                .querySelectorAll("#nearby-accordion .bus-list")
-                .forEach(list => {
-                    if (
-                        list.children.length &&
-                        !list.children[0].classList.contains("empty")
-                    ) {
-                        anyMatch = true;
-                    }
-                });
-
-            if (!anyMatch && nearbyMsgEl) {
-                nearbyMsgEl.textContent =
-                    "No hay paradas cercanas con buses de esa línea ahora mismo.";
-            } else if (nearbyMsgEl) {
-                nearbyMsgEl.textContent = "";
-            }
-        });
+        }, 400);
     });
 }
 

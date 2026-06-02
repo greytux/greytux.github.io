@@ -1,7 +1,7 @@
 // shortcuts.js — atajos diarios (Casa / Trabajo) + manejo de URL params para
 // abrir directamente una parada (ya sea por id o por nombre del atajo).
 
-import { FAVORITES, DYNAMIC_STOPS, STOPS } from "./state.js";
+import { FAVORITES, STOPS } from "./state.js";
 
 const STORAGE_KEY = "greytux:shortcuts:v1";
 
@@ -136,7 +136,7 @@ export function renderShortcutsConfig(containerId = "shortcuts-config") {
     const container = document.getElementById(containerId);
     if (!container) return;
 
-    const allOptions = [...FAVORITES, ...DYNAMIC_STOPS];
+    const allOptions = [...FAVORITES];
     const optionsHtml = allOptions
         .map(s => {
             const label = s.label || `Parada ${s.id}`;

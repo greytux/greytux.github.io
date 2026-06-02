@@ -56,9 +56,8 @@
     <main class="main">
         <div class="tabs">
             <button class="tab-btn active" data-index="0">Favoritas</button>
-            <button class="tab-btn" data-index="1">Mis paradas</button>
-            <button class="tab-btn" data-index="2">Cerca de mí</button>
-            <button class="tab-btn" data-index="3">Mapa</button>
+            <button class="tab-btn" data-index="1">Cerca de mí</button>
+            <button class="tab-btn" data-index="2">Mapa</button>
         </div>
 
         <div class="slider">
@@ -91,46 +90,23 @@
                         </div>
                     </section>
 
-                    <div id="favorites-stops"></div>
-                </section>
-
-                <!-- Slide 1: Mis paradas -->
-                <section class="slide accordion" data-slide="1">
-                    <section class="dynamic-controls">
-                        <div class="dynamic-title">Añadir otra parada</div>
-                        <form id="add-stop-form" class="dynamic-form">
-                            <label for="stop-id-input">Parada</label>
-                            <input
-                                    id="stop-id-input"
-                                    class="dynamic-input"
-                                    type="number"
-                                    inputmode="numeric"
-                                    placeholder="Ej: 1234"
-                            />
-                            <button type="submit" class="dynamic-button">Añadir</button>
-                        </form>
-                        <div class="dynamic-help">
-                            Se creará un nuevo acordeón con llegadas en tiempo real.
-                            Puedes ver la ubicación en mapa y la ruta andando desde Google Maps.
-                        </div>
-                    </section>
-
                     <div class="nearby-filter">
-                        <label for="my-line-input">Filtrar mis paradas por línea (opcional)</label>
+                        <label for="fav-line-input">Filtrar favoritas por línea (opcional)</label>
                         <input
-                                id="my-line-input"
+                                id="fav-line-input"
                                 class="nearby-line-input"
                                 type="text"
                                 inputmode="numeric"
-                                placeholder="Ej: 66, 137..."
+                                placeholder="Ej: 137"
                         />
+                        <div id="fav-filter-message" class="nearby-filter-message"></div>
                     </div>
 
-                    <div id="dynamic-stops"></div>
+                    <div id="favorites-stops"></div>
                 </section>
 
-                <!-- Slide 2: Paradas cercanas -->
-                <section class="slide accordion" data-slide="2">
+                <!-- Slide 1: Paradas cercanas -->
+                <section class="slide accordion" data-slide="1">
                     <section class="nearby-section">
                         <div class="nearby-title">
                             Paradas cercanas
@@ -142,18 +118,13 @@
 
                         <div class="nearby-filter">
                             <label for="nearby-line-input">Filtrar paradas cercanas por línea (opcional)</label>
-                            <div class="nearby-filter-row">
-                                <input
-                                        id="nearby-line-input"
-                                        class="nearby-line-input"
-                                        type="text"
-                                        inputmode="numeric"
-                                        placeholder="Ej: 66, 137..."
-                                />
-                                <button type="button" id="nearby-apply" class="nearby-filter-btn">
-                                    Aplicar
-                                </button>
-                            </div>
+                            <input
+                                    id="nearby-line-input"
+                                    class="nearby-line-input"
+                                    type="text"
+                                    inputmode="numeric"
+                                    placeholder="Ej: 137"
+                            />
                             <button type="button" id="nearby-clear" class="nearby-filter-clear">
                                 Quitar filtro
                             </button>
@@ -164,13 +135,12 @@
                     </section>
                 </section>
 
-                <!-- Slide 3: Mapa -->
-                <section class="slide" data-slide="3">
+                <!-- Slide 2: Mapa -->
+                <section class="slide" data-slide="2">
                     <div class="map-wrapper">
                         <div id="map" aria-label="Mapa de paradas"></div>
                         <div class="map-legend" aria-hidden="true">
                             <span class="map-legend-item"><span class="map-legend-dot map-legend-fav">★</span>Favorita</span>
-                            <span class="map-legend-item"><span class="map-legend-dot map-legend-dyn"></span>Mis paradas</span>
                             <span class="map-legend-item"><span class="map-legend-dot map-legend-near"></span>Cercana</span>
                             <span class="map-legend-item"><span class="map-legend-dot map-legend-user"></span>Tú</span>
                         </div>
