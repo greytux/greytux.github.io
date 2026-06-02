@@ -214,7 +214,7 @@ function normalizeLineLocal(l) {
     return String(l).trim().replace(/^0+/, "");
 }
 
-function getStopLinesFromRawStop(rawStop) {
+export function getStopLinesFromRawStop(rawStop) {
     if (!rawStop) return [];
 
     if (Array.isArray(rawStop.dataLine)) {
@@ -224,7 +224,16 @@ function getStopLinesFromRawStop(rawStop) {
     }
 
     if (Array.isArray(rawStop.lines)) {
-        return rawStop.lines.map(l => normalizeLineLocal(l));
+        return rawStop.lines
+            .map(l => {
+                if (l == null) return "";
+                // arroundxy devuelve a veces objetos { line, label, ... }
+                if (typeof l === "object") {
+                    return normalizeLineLocal(l.label || l.line || l.name || "");
+                }
+                return normalizeLineLocal(l);
+            })
+            .filter(Boolean);
     }
 
     if (typeof rawStop.lines === "string") {

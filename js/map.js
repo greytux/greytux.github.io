@@ -2,7 +2,6 @@
 
 import {
     FAVORITES,
-    DYNAMIC_STOPS,
     STOP_COORDS,
     nearbyStopsCache
 } from "./state.js";
@@ -31,11 +30,7 @@ function makeStopIcon(kind, symbol = "") {
 }
 
 function popupHtmlFor(stopId, kind, name) {
-    const kindLabel = kind === "fav"
-        ? "Favorita"
-        : kind === "dyn"
-            ? "Mis paradas"
-            : "Cercana";
+    const kindLabel = kind === "fav" ? "Favorita" : "Cercana";
     const safeName = name || `Parada ${stopId}`;
     return `
         <div class="map-popup">
@@ -59,9 +54,8 @@ function escapeHtml(s) {
 }
 
 function switchToTabAndOpenAccordion(stopId, kind) {
-    const tabIndex = kind === "fav" ? 0
-                   : kind === "dyn" ? 1
-                   : 2;
+    // fav → pestaña Favoritas (0); cualquier otra (cercana) → Cerca de mí (1)
+    const tabIndex = kind === "fav" ? 0 : 1;
     const tab = document.querySelector(`.tab-btn[data-index="${tabIndex}"]`);
     if (tab) tab.click();
 
@@ -149,21 +143,6 @@ export function refreshMapMarkers() {
         m.bindPopup(popupHtmlFor(fav.id, "fav", fav.label));
         m.addTo(markerLayer);
         placed.add(fav.id);
-        bounds.push([coords.lat, coords.lon]);
-    });
-
-    // Mis paradas
-    DYNAMIC_STOPS.forEach(s => {
-        if (placed.has(s.id)) return;
-        const coords = STOP_COORDS[s.id];
-        if (!coords) return;
-        const m = window.L.marker([coords.lat, coords.lon], {
-            icon: makeStopIcon("dyn"),
-            title: s.label || `Parada ${s.id}`
-        });
-        m.bindPopup(popupHtmlFor(s.id, "dyn", s.label));
-        m.addTo(markerLayer);
-        placed.add(s.id);
         bounds.push([coords.lat, coords.lon]);
     });
 
