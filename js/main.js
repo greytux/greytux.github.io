@@ -313,11 +313,47 @@ if (document.visibilityState === "visible") {
     startPolling();
 }
 
-// Registro del service worker (PWA)
+// Registro del service worker (PWA) + aviso de versión nueva
 if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-        navigator.serviceWorker
-            .register("./sw.js")
-            .catch(err => console.warn("SW no registrado:", err));
+    // Cuando el SW en espera toma el control, recargamos una sola vez para
+    // que la página corra ya con el código nuevo.
+    let reloading = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (reloading) return;
+        reloading = true;
+        window.location.reload();
+    });
+
+    const notifyUpdate = (worker) => {
+        if (!worker) return;
+        toast("Nueva versión disponible. Toca para actualizar.", {
+            type: "info",
+            sticky: true,
+            onClick: () => worker.postMessage({ type: "SKIP_WAITING" })
+        });
+    };
+
+    window.addEventListener("load", async () => {
+        try {
+            const reg = await navigator.serviceWorker.register("./sw.js");
+
+            // Si al registrar ya hay uno esperando y la página está controlada
+            // por un SW activo, es que hay versión nueva lista.
+            if (reg.waiting && navigator.serviceWorker.controller) {
+                notifyUpdate(reg.waiting);
+            }
+
+            reg.addEventListener("updatefound", () => {
+                const nw = reg.installing;
+                if (!nw) return;
+                nw.addEventListener("statechange", () => {
+                    if (nw.state === "installed" && navigator.serviceWorker.controller) {
+                        notifyUpdate(nw);
+                    }
+                });
+            });
+        } catch (err) {
+            console.warn("SW no registrado:", err);
+        }
     });
 }
