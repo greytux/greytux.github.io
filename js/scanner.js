@@ -55,6 +55,9 @@ export function openQrScanner() {
     return new Promise((resolve) => {
         let settled = false;
         let scanner = null;
+        // id único por apertura: evita colisiones si quedara un modal anterior
+        // a medio cerrar y garantiza que la librería arranca limpia cada vez.
+        const regionId = `qr-reader-region-${Date.now()}`;
 
         const overlay = document.createElement("div");
         overlay.className = "scanner-overlay";
@@ -64,7 +67,7 @@ export function openQrScanner() {
                     <div class="scanner-title">Escanea el QR de la parada</div>
                     <button type="button" class="scanner-close" aria-label="Cerrar">✕</button>
                 </div>
-                <div id="qr-reader-region" class="scanner-region"></div>
+                <div id="${regionId}" class="scanner-region"></div>
                 <div class="scanner-status">Apunta la cámara al código QR de la marquesina.</div>
             </div>
         `;
@@ -100,18 +103,21 @@ export function openQrScanner() {
 
         const onScanSuccess = (decodedText) => {
             const stopId = parseStopIdFromQr(decodedText);
-            if (stopId != null) {
-                finish(stopId);
-            } else {
+            if (stopId == null) {
                 statusEl.textContent = "QR leído pero sin número de parada reconocible.";
+                return;
             }
+            // Diferimos el cierre un tick para no llamar a stop() mientras la
+            // librería está a mitad del callback (deja la cámara colgada y la
+            // siguiente apertura falla).
+            setTimeout(() => finish(stopId), 0);
         };
 
         const start = async () => {
             try {
                 statusEl.textContent = "Preparando la cámara…";
                 await loadLib();
-                scanner = new window.Html5Qrcode("qr-reader-region", { verbose: false });
+                scanner = new window.Html5Qrcode(regionId, { verbose: false });
                 await scanner.start(
                     { facingMode: "environment" },
                     {

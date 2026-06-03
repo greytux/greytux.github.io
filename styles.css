@@ -786,10 +786,11 @@ h1 {
     inset: 0;
     background: rgba(15,23,42,0.75);
     display: flex;
-    align-items: center;
+    align-items: flex-start;       /* arriba, no centrado: evita tener que bajar */
     justify-content: center;
     padding: 16px;
     z-index: 10002;
+    overflow-y: auto;
     opacity: 0;
     transition: opacity 0.15s ease;
 }
@@ -803,6 +804,7 @@ h1 {
     border-radius: 14px;
     width: 100%;
     max-width: 420px;
+    margin-top: 6vh;
     padding: 14px 16px 16px;
     box-shadow: 0 20px 48px rgba(0,0,0,0.45);
     display: flex;
@@ -839,15 +841,19 @@ h1 {
 
 .scanner-region {
     width: 100%;
+    max-height: 55vh;
     border-radius: 12px;
     overflow: hidden;
     background: #020617;
 }
 
-/* La librería inyecta su propio <video>; lo forzamos a ancho completo */
+/* La librería inyecta su propio <video>; ancho completo y altura limitada
+   para que el modal entero quepa en pantalla sin tener que hacer scroll */
 .scanner-region video {
     width: 100% !important;
     height: auto !important;
+    max-height: 55vh;
+    object-fit: cover;
     display: block;
 }
 
