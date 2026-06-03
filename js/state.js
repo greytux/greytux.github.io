@@ -256,42 +256,6 @@ export function getAlarmsForStop(stopId) {
     return ALARMS.filter(a => a.stopId === stopId);
 }
 
-// Persistencia de accessToken EMT
-const TOKEN_STORAGE_KEY = "greytux:emt-token:v1";
-
-export function getStoredToken() {
-    try {
-        const raw = localStorage.getItem(TOKEN_STORAGE_KEY);
-        if (!raw) return null;
-        const parsed = JSON.parse(raw);
-        if (!parsed || typeof parsed.token !== "string") return null;
-        if (typeof parsed.expiresAt === "number" && parsed.expiresAt < Date.now()) {
-            return null;
-        }
-        return parsed.token;
-    } catch {
-        return null;
-    }
-}
-
-export function setStoredToken(token, expiresAt) {
-    if (typeof token !== "string" || !token) return;
-    try {
-        localStorage.setItem(
-            TOKEN_STORAGE_KEY,
-            JSON.stringify({ token, expiresAt })
-        );
-    } catch (e) {
-        console.warn("No se pudo guardar el token EMT", e);
-    }
-}
-
-export function clearStoredToken() {
-    try {
-        localStorage.removeItem(TOKEN_STORAGE_KEY);
-    } catch {}
-}
-
 // Cooldown API EMT
 export const API_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutos
 let apiCooldownUntil = 0;

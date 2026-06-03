@@ -1,0 +1,7 @@
+name = "turrobuses-emt"
+main = "emt-proxy.js"
+compatibility_date = "2024-11-01"
+
+# Las credenciales NO van aquí. Se guardan como secretos cifrados:
+#   wrangler secret put EMT_EMAIL
+#   wrangler secret put EMT_PASSWORD

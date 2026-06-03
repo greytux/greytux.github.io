@@ -1,50 +1,16 @@
 import {
-    BASE_URL_V1,
-    BASE_URL_V2,
     STOP_COORDS,
     STOP_LINES,
     activateApiCooldown,
-    isApiInCooldown,
-    getStoredToken,
-    setStoredToken,
-    clearStoredToken
+    isApiInCooldown
 } from "./state.js";
 
 import { trackArrivals } from "./etaTracker.js";
 
-// TODO -> ocultar
-const USER = "diegojesus.escudero@gmail.com";
-const PASS = "Linares251291?";
-
-// Si ya tenemos un token válido en localStorage lo reutilizamos:
-// así evitamos hacer login en cada recarga.
-let accessToken = getStoredToken();
-
-// Lifespan por defecto si la API no nos dice nada (25 min, conservador).
-const DEFAULT_TOKEN_LIFESPAN_MS = 25 * 60 * 1000;
-
-function deriveTokenExpiry(data0) {
-    if (!data0) return Date.now() + DEFAULT_TOKEN_LIFESPAN_MS;
-
-    if (
-        data0.tokenDteExpiration &&
-        typeof data0.tokenDteExpiration === "object" &&
-        Number.isFinite(data0.tokenDteExpiration.$date)
-    ) {
-        return Number(data0.tokenDteExpiration.$date);
-    }
-
-    if (Number.isFinite(data0.tokenSecExpiration)) {
-        return Date.now() + data0.tokenSecExpiration * 1000;
-    }
-
-    return Date.now() + DEFAULT_TOKEN_LIFESPAN_MS;
-}
-
-function invalidateToken() {
-    accessToken = null;
-    clearStoredToken();
-}
+// URL del proxy (Cloudflare Worker). Las credenciales de EMT viven en el
+// Worker, no aquí. Sustituye este valor por la URL que te da `wrangler deploy`
+// (ver worker/README.md).
+const PROXY_BASE = "https://turrobuses-emt.TU-SUBDOMINIO.workers.dev";
 
 function isLimitErrorJson(json) {
     if (!json) return false;
@@ -55,74 +21,13 @@ function isLimitErrorJson(json) {
     return false;
 }
 
-// --- LOGIN EMT ---
-async function login() {
-    if (isApiInCooldown()) {
-        throw new Error("API_COOLDOWN");
-    }
-
-    const res = await fetch(`${BASE_URL_V2}/mobilitylabs/user/login/`, {
-        method: "GET",
-        headers: {
-            "email": USER,
-            "password": PASS
-        }
-    });
-
-    if (!res.ok) {
-        throw new Error("Error HTTP en login: " + res.status);
-    }
-
-    const json = await res.json();
-    console.log("LOGIN JSON", json);
-
-    if (isLimitErrorJson(json)) {
-        activateApiCooldown();
-        throw new Error("API_LIMIT_REACHED");
-    }
-
-    if (json.code !== "00" && json.code !== "01") {
-        invalidateToken();
-        throw new Error("Login EMT falló: " + (json.description || json.code));
-    }
-
-    const data0 = json.data && json.data[0];
-    accessToken = data0 && data0.accessToken;
-    if (!accessToken) {
-        invalidateToken();
-        throw new Error("Login EMT no devolvió accessToken");
-    }
-    setStoredToken(accessToken, deriveTokenExpiry(data0));
-    return accessToken;
-}
-
 // --- LLEGADAS PARADA ---
-const MAX_AUTH_RETRIES = 1;
-
-export async function getArrivals(stopId, _retries = 0) {
+export async function getArrivals(stopId) {
     if (isApiInCooldown()) {
         throw new Error("API_COOLDOWN");
     }
 
-    if (!accessToken) {
-        await login();
-    }
-
-    const res = await fetch(
-        `${BASE_URL_V2}/transport/busemtmad/stops/${stopId}/arrives/`,
-        {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "accessToken": accessToken
-            },
-            body: JSON.stringify({
-                stopId: stopId,
-                Text_EstimationsRequired_YN: "Y",
-                Urban_UseYN: "Y"
-            })
-        }
-    );
+    const res = await fetch(`${PROXY_BASE}/api/arrives/${stopId}`);
 
     if (!res.ok) {
         throw new Error("Error HTTP en arrives (" + stopId + "): " + res.status);
@@ -137,10 +42,6 @@ export async function getArrivals(stopId, _retries = 0) {
     }
 
     if (json.code !== "00") {
-        if ((json.code === "01" || json.code === "02") && _retries < MAX_AUTH_RETRIES) {
-            invalidateToken();
-            return getArrivals(stopId, _retries + 1);
-        }
         throw new Error("Error API arrives (" + stopId + "): " + (json.description || json.code));
     }
 
@@ -244,21 +145,11 @@ export function getStopLinesFromRawStop(rawStop) {
     return [];
 }
 
-async function fetchStopDetailRaw(stopId, baseUrl) {
-    const res = await fetch(
-        `${baseUrl}/transport/busemtmad/stops/${stopId}/detail/`,
-        {
-            method: "GET",
-            headers: {
-                "accessToken": accessToken
-            }
-        }
-    );
-
+async function fetchStopDetailRaw(stopId, version) {
+    const res = await fetch(`${PROXY_BASE}/api/detail/${stopId}?v=${version}`);
     if (!res.ok) {
         return { ok: false, status: res.status };
     }
-
     const json = await res.json();
     return { ok: true, json };
 }
@@ -270,17 +161,13 @@ export async function fetchStopCoords(stopId) {
         throw new Error("API_COOLDOWN");
     }
 
-    if (!accessToken) {
-        await login();
-    }
-
     // Intentamos primero V1; si devuelve 81 (No records) o similar,
     // probamos V2 antes de rendirnos. Algunas paradas (p.ej. 2677) no
     // existen en V1 pero sí en V2.
-    let attempt = await fetchStopDetailRaw(stopId, BASE_URL_V1);
+    let attempt = await fetchStopDetailRaw(stopId, 1);
     if (!attempt.ok) {
         console.warn("Error HTTP en detalle V1 de parada:", stopId, attempt.status);
-        attempt = await fetchStopDetailRaw(stopId, BASE_URL_V2);
+        attempt = await fetchStopDetailRaw(stopId, 2);
         if (!attempt.ok) {
             console.warn("Error HTTP en detalle V2 de parada:", stopId, attempt.status);
             return null;
@@ -301,7 +188,7 @@ export async function fetchStopCoords(stopId) {
             "Detalle V1 falló para parada", stopId, ":",
             json.description || json.code, "— probando V2"
         );
-        const attempt2 = await fetchStopDetailRaw(stopId, BASE_URL_V2);
+        const attempt2 = await fetchStopDetailRaw(stopId, 2);
         if (attempt2.ok) {
             console.log("DETAIL V2 JSON stop", stopId, attempt2.json);
             if (isLimitErrorJson(attempt2.json)) {
@@ -391,13 +278,9 @@ export async function fetchStopCoords(stopId) {
 }
 
 // --- PARADAS CERCANAS ---
-export async function getNearbyStops(_retries = 0) {
+export async function getNearbyStops() {
     if (isApiInCooldown()) {
         throw new Error("API_COOLDOWN");
-    }
-
-    if (!accessToken) {
-        await login();
     }
 
     if (!navigator.geolocation) {
@@ -416,15 +299,7 @@ export async function getNearbyStops(_retries = 0) {
     const lon = pos.coords.longitude;
     const radius = 400;
 
-    const res = await fetch(
-        `${BASE_URL_V2}/transport/busemtmad/stops/arroundxy/${lon}/${lat}/${radius}/`,
-        {
-            method: "GET",
-            headers: {
-                "accessToken": accessToken
-            }
-        }
-    );
+    const res = await fetch(`${PROXY_BASE}/api/nearby/${lon}/${lat}/${radius}`);
 
     if (!res.ok) {
         throw new Error("Error HTTP en paradas cercanas: " + res.status);
@@ -439,10 +314,6 @@ export async function getNearbyStops(_retries = 0) {
     }
 
     if (json.code !== "00") {
-        if ((json.code === "01" || json.code === "02") && _retries < MAX_AUTH_RETRIES) {
-            invalidateToken();
-            return getNearbyStops(_retries + 1);
-        }
         throw new Error("Error API paradas cercanas: " + (json.description || json.code));
     }
 
