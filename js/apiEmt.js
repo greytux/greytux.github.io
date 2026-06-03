@@ -10,7 +10,7 @@ import { trackArrivals } from "./etaTracker.js";
 // URL del proxy (Cloudflare Worker). Las credenciales de EMT viven en el
 // Worker, no aquí. Sustituye este valor por la URL que te da `wrangler deploy`
 // (ver worker/README.md).
-const PROXY_BASE = "https://turrobuses-emt.TU-SUBDOMINIO.workers.dev";
+const PROXY_BASE = "https://turrobuses-emt.diegojesus-escudero.workers.dev";
 
 function isLimitErrorJson(json) {
     if (!json) return false;
