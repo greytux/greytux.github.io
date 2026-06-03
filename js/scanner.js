@@ -1,31 +1,26 @@
-// scanner.js — escanear el QR de una parada EMT con la cámara.
+// scanner.js — lector de QR de paradas EMT en vivo.
 //
-// En vez de vídeo en vivo (getUserMedia), que en Safari/iOS-PWA suele dar
-// preview en negro, usamos el "modo foto" nativo: <input type="file" capture>.
-// El sistema abre su cámara, el usuario hace una foto y decodificamos la imagen
-// con BarcodeDetector (si existe) o jsQR como respaldo. Fiable en iPhone y
-// Android por igual.
+// Usamos la librería html5-qrcode (cargada bajo demanda desde CDN) en lugar de
+// manejar getUserMedia a mano: tiene resueltos los problemas de cámara en
+// Safari/iOS (preview en negro, playsinline, selección de cámara, etc.).
 
-import { toast } from "./toast.js";
+const HTML5QRCODE_URL = "https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js";
 
-const JSQR_URL = "https://unpkg.com/jsqr@1.4.0/dist/jsQR.js";
-
-let jsQrPromise = null;
-function loadJsQR() {
-    if (window.jsQR) return Promise.resolve(window.jsQR);
-    if (jsQrPromise) return jsQrPromise;
-    jsQrPromise = new Promise((resolve, reject) => {
+let libPromise = null;
+function loadLib() {
+    if (window.Html5Qrcode) return Promise.resolve();
+    if (libPromise) return libPromise;
+    libPromise = new Promise((resolve, reject) => {
         const s = document.createElement("script");
-        s.src = JSQR_URL;
-        s.crossOrigin = "anonymous";
-        s.onload = () => resolve(window.jsQR);
+        s.src = HTML5QRCODE_URL;
+        s.onload = () => resolve();
         s.onerror = () => {
-            jsQrPromise = null;
+            libPromise = null;
             reject(new Error("No se pudo cargar el lector de QR."));
         };
         document.head.appendChild(s);
     });
-    return jsQrPromise;
+    return libPromise;
 }
 
 // Extrae el número de parada del contenido del QR. El QR de la EMT es una URL
@@ -55,110 +50,91 @@ export function parseStopIdFromQr(text) {
     return null;
 }
 
-// Carga el File como algo dibujable en canvas (ImageBitmap o <img>).
-async function fileToDrawable(file) {
-    if ("createImageBitmap" in window) {
-        try {
-            return await createImageBitmap(file);
-        } catch {
-            /* algunos formatos/Safari fallan: caemos a <img> */
-        }
-    }
-    return await new Promise((resolve, reject) => {
-        const img = new Image();
-        const url = URL.createObjectURL(file);
-        img.onload = () => {
-            URL.revokeObjectURL(url);
-            resolve(img);
-        };
-        img.onerror = (e) => {
-            URL.revokeObjectURL(url);
-            reject(e);
-        };
-        img.src = url;
-    });
-}
-
-// Decodifica el QR de una imagen y devuelve el número de parada o null.
-async function decodeStopFromFile(file) {
-    const src = await fileToDrawable(file);
-    const w = src.width || src.naturalWidth;
-    const h = src.height || src.naturalHeight;
-    if (!w || !h) return null;
-
-    // 1) BarcodeDetector nativo (Android/Chrome): admite directamente la imagen
-    if ("BarcodeDetector" in window) {
-        try {
-            const det = new window.BarcodeDetector({ formats: ["qr_code"] });
-            const codes = await det.detect(src);
-            if (codes && codes.length) {
-                return parseStopIdFromQr(codes[0].rawValue);
-            }
-        } catch {
-            /* seguimos con jsQR */
-        }
-    }
-
-    // 2) jsQR sobre los píxeles del canvas
-    const canvas = document.createElement("canvas");
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    ctx.drawImage(src, 0, 0, w, h);
-    const imageData = ctx.getImageData(0, 0, w, h);
-
-    const jsQR = await loadJsQR();
-    const code = jsQR(imageData.data, w, h);
-    return code && code.data ? parseStopIdFromQr(code.data) : null;
-}
-
-// Abre la cámara en modo foto y resuelve con el número de parada, o null.
+// Abre el lector de QR en vivo y resuelve con el número de parada, o null.
 export function openQrScanner() {
     return new Promise((resolve) => {
         let settled = false;
-        const input = document.createElement("input");
-        input.type = "file";
-        input.accept = "image/*";
-        input.capture = "environment"; // cámara trasera directa
-        input.style.display = "none";
-        document.body.appendChild(input);
+        let scanner = null;
 
-        const finish = (result) => {
+        const overlay = document.createElement("div");
+        overlay.className = "scanner-overlay";
+        overlay.innerHTML = `
+            <div class="scanner-modal" role="dialog" aria-modal="true" aria-label="Escanear QR de la parada">
+                <div class="scanner-header">
+                    <div class="scanner-title">Escanea el QR de la parada</div>
+                    <button type="button" class="scanner-close" aria-label="Cerrar">✕</button>
+                </div>
+                <div id="qr-reader-region" class="scanner-region"></div>
+                <div class="scanner-status">Apunta la cámara al código QR de la marquesina.</div>
+            </div>
+        `;
+
+        const statusEl = overlay.querySelector(".scanner-status");
+        const closeBtn = overlay.querySelector(".scanner-close");
+
+        const finish = async (result) => {
             if (settled) return;
             settled = true;
-            window.removeEventListener("focus", onFocusBack);
-            input.remove();
+            document.removeEventListener("keydown", onKey);
+            if (scanner) {
+                try { await scanner.stop(); } catch { /* ya parado */ }
+                try { scanner.clear(); } catch { /* noop */ }
+            }
+            overlay.classList.remove("scanner-visible");
+            setTimeout(() => overlay.remove(), 150);
             resolve(result);
         };
 
-        // Los <input file> no avisan al cancelar. Si vuelve el foco a la página
-        // y no hay archivo, asumimos cancelación.
-        const onFocusBack = () => {
-            setTimeout(() => {
-                if (!input.files || !input.files.length) finish(null);
-            }, 600);
+        const onKey = (e) => {
+            if (e.key === "Escape") finish(null);
         };
 
-        input.addEventListener("change", async () => {
-            const file = input.files && input.files[0];
-            if (!file) return finish(null);
-            try {
-                const stopId = await decodeStopFromFile(file);
-                if (stopId == null) {
-                    toast(
-                        "No se ha podido leer el QR. Acércate y enfoca bien el código.",
-                        { type: "error", duration: 5000 }
-                    );
-                }
-                finish(stopId);
-            } catch (err) {
-                console.warn("Error decodificando QR", err);
-                toast("No se pudo procesar la foto del QR.", { type: "error" });
-                finish(null);
-            }
+        closeBtn.addEventListener("click", () => finish(null));
+        overlay.addEventListener("click", (e) => {
+            if (e.target === overlay) finish(null);
         });
+        document.addEventListener("keydown", onKey);
 
-        window.addEventListener("focus", onFocusBack);
-        input.click();
+        document.body.appendChild(overlay);
+        requestAnimationFrame(() => overlay.classList.add("scanner-visible"));
+
+        const onScanSuccess = (decodedText) => {
+            const stopId = parseStopIdFromQr(decodedText);
+            if (stopId != null) {
+                finish(stopId);
+            } else {
+                statusEl.textContent = "QR leído pero sin número de parada reconocible.";
+            }
+        };
+
+        const start = async () => {
+            try {
+                statusEl.textContent = "Preparando la cámara…";
+                await loadLib();
+                scanner = new window.Html5Qrcode("qr-reader-region", { verbose: false });
+                await scanner.start(
+                    { facingMode: "environment" },
+                    {
+                        fps: 10,
+                        qrbox: (vw, vh) => {
+                            const m = Math.floor(Math.min(vw, vh) * 0.7);
+                            return { width: m, height: m };
+                        }
+                    },
+                    onScanSuccess,
+                    () => { /* fallo por frame: lo ignoramos */ }
+                );
+                statusEl.textContent = "Apunta la cámara al código QR de la marquesina.";
+            } catch (err) {
+                console.warn("No se pudo iniciar el lector de QR", err);
+                const name = err && (err.name || err);
+                statusEl.textContent =
+                    name === "NotAllowedError"
+                        ? "Permiso de cámara denegado. Actívalo para escanear."
+                        : (err && err.message) || "No se pudo acceder a la cámara.";
+            }
+        };
+
+        start();
     });
 }
