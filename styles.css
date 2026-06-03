@@ -32,8 +32,9 @@ body {
     background: radial-gradient(circle at 30% 20%, rgba(29,78,216,0.45), transparent 60%),
     radial-gradient(circle at 80% 80%, rgba(2,132,199,0.45), transparent 55%),
     #0b1220;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    /* Sin backdrop-filter aquí: no difumina nada (no hay contenido detrás del
+       body) y, al crear bloque contenedor, rompía el position:fixed de los
+       diálogos/overlays haciéndolos aparecer en el centro del documento. */
 
     color: var(--text);
     overflow-x: hidden;

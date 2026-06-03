@@ -3,7 +3,7 @@
 // - NO cachea llamadas a la API EMT: deben ir siempre a red para no
 //   mostrar tiempos de bus rancios.
 
-const CACHE_VERSION = "turrobuses-shell-v17";
+const CACHE_VERSION = "turrobuses-shell-v18";
 const SHELL_ASSETS = [
     "./",
     "./index.html",
