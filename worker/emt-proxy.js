@@ -76,8 +76,40 @@ async function emtFetch(env, url, init = {}, _retry = 0) {
     return data;
 }
 
+// Tiempo de cache por tipo de endpoint (segundos). Las llegadas se cachean
+// pocos segundos (son "tiempo real" pero el cliente refresca cada 45s); el
+// detalle de parada es casi estático; las cercanas, un valor intermedio.
+const TTL = { arrives: 15, detail: 21600, nearby: 30 };
+
+// Devuelve la respuesta cacheada si existe; si no, la produce, la cachea (solo
+// si EMT respondió code "00") y la devuelve. Cacheamos solo los DATOS (sin
+// cabeceras CORS) y reaplicamos CORS por petición, para no servir el
+// Access-Control-Allow-Origin de un origen a otro.
+async function cachedJson(request, ctx, kind, origin, producer) {
+    const cache = caches.default;
+    const cacheKey = new Request(new URL(request.url).toString(), { method: "GET" });
+
+    const hit = await cache.match(cacheKey);
+    if (hit) {
+        const data = await hit.json();
+        return jsonResponse(data, origin);
+    }
+
+    const data = await producer();
+    if (data && data.code === "00") {
+        const toCache = new Response(JSON.stringify(data), {
+            headers: {
+                "Content-Type": "application/json",
+                "Cache-Control": `max-age=${TTL[kind]}`
+            }
+        });
+        ctx.waitUntil(cache.put(cacheKey, toCache));
+    }
+    return jsonResponse(data, origin);
+}
+
 export default {
-    async fetch(request, env) {
+    async fetch(request, env, ctx) {
         const origin = request.headers.get("Origin") || "";
 
         if (request.method === "OPTIONS") {
@@ -95,32 +127,34 @@ export default {
             // /api/arrives/:stopId  → llegadas en tiempo real
             if (parts[1] === "arrives" && parts[2]) {
                 const stopId = parts[2];
-                const data = await emtFetch(
-                    env,
-                    `${V2}/transport/busemtmad/stops/${stopId}/arrives/`,
-                    {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            stopId,
-                            Text_EstimationsRequired_YN: "Y",
-                            Urban_UseYN: "Y"
-                        })
-                    }
+                return cachedJson(request, ctx, "arrives", origin, () =>
+                    emtFetch(
+                        env,
+                        `${V2}/transport/busemtmad/stops/${stopId}/arrives/`,
+                        {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                stopId,
+                                Text_EstimationsRequired_YN: "Y",
+                                Urban_UseYN: "Y"
+                            })
+                        }
+                    )
                 );
-                return jsonResponse(data, origin);
             }
 
             // /api/detail/:stopId?v=1|2  → detalle de parada (coords + líneas)
             if (parts[1] === "detail" && parts[2]) {
                 const stopId = parts[2];
                 const base = url.searchParams.get("v") === "2" ? V2 : V1;
-                const data = await emtFetch(
-                    env,
-                    `${base}/transport/busemtmad/stops/${stopId}/detail/`,
-                    { method: "GET" }
+                return cachedJson(request, ctx, "detail", origin, () =>
+                    emtFetch(
+                        env,
+                        `${base}/transport/busemtmad/stops/${stopId}/detail/`,
+                        { method: "GET" }
+                    )
                 );
-                return jsonResponse(data, origin);
             }
 
             // /api/nearby/:lon/:lat/:radius  → paradas cercanas
@@ -128,12 +162,13 @@ export default {
                 const lon = parts[2];
                 const lat = parts[3];
                 const radius = parts[4];
-                const data = await emtFetch(
-                    env,
-                    `${V2}/transport/busemtmad/stops/arroundxy/${lon}/${lat}/${radius}/`,
-                    { method: "GET" }
+                return cachedJson(request, ctx, "nearby", origin, () =>
+                    emtFetch(
+                        env,
+                        `${V2}/transport/busemtmad/stops/arroundxy/${lon}/${lat}/${radius}/`,
+                        { method: "GET" }
+                    )
                 );
-                return jsonResponse(data, origin);
             }
 
             return jsonResponse({ error: "not_found" }, origin, 404);

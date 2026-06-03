@@ -46,3 +46,14 @@ Copia esa URL y ponla en `js/apiEmt.js` (constante `PROXY_BASE`).
 - El proxy solo acepta peticiones desde los orígenes de `ALLOWED_ORIGINS`
   (edítalo en `emt-proxy.js` si cambias de dominio).
 - El token de EMT se cachea en el Worker para no hacer login en cada llamada.
+- Las respuestas se cachean (Cache API) por tipo: llegadas 15s, cercanas 30s,
+  detalle 6h. Solo se cachean respuestas correctas (code 00). Esto reduce las
+  llamadas a EMT y protege frente al límite de cuota.
+
+## Volver a desplegar tras cambios
+
+Cualquier cambio en `emt-proxy.js` requiere desplegar de nuevo:
+
+```bash
+wrangler deploy
+```
