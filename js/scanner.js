@@ -1,6 +1,12 @@
-// scanner.js — escáner de códigos QR de paradas EMT con la cámara.
-// Usa BarcodeDetector nativo donde existe (Android/Chrome) y cae a jsQR
-// (cargado bajo demanda desde CDN) en navegadores sin soporte (iPhone/Safari).
+// scanner.js — escanear el QR de una parada EMT con la cámara.
+//
+// En vez de vídeo en vivo (getUserMedia), que en Safari/iOS-PWA suele dar
+// preview en negro, usamos el "modo foto" nativo: <input type="file" capture>.
+// El sistema abre su cámara, el usuario hace una foto y decodificamos la imagen
+// con BarcodeDetector (si existe) o jsQR como respaldo. Fiable en iPhone y
+// Android por igual.
+
+import { toast } from "./toast.js";
 
 const JSQR_URL = "https://unpkg.com/jsqr@1.4.0/dist/jsQR.js";
 
@@ -27,7 +33,6 @@ function loadJsQR() {
 export function parseStopIdFromQr(text) {
     if (!text) return null;
 
-    // 1) URL con parámetro stopnum / stop / parada
     try {
         const u = new URL(text);
         const sn =
@@ -39,191 +44,121 @@ export function parseStopIdFromQr(text) {
         /* no es una URL absoluta, seguimos con los patrones */
     }
 
-    // 2) patrón stopnum=NNNN / parada=NNNN en texto suelto
     const m =
         text.match(/stop(?:num)?=(\d+)/i) ||
         text.match(/parada[=/](\d+)/i);
     if (m) return parseInt(m[1], 10);
 
-    // 3) primer número de hasta 5 dígitos como último recurso
     const n = text.match(/\b(\d{1,5})\b/);
     if (n) return parseInt(n[1], 10);
 
     return null;
 }
 
-// Abre el modal de cámara y resuelve con el número de parada escaneado, o null
-// si el usuario cancela / no se pudo escanear.
+// Carga el File como algo dibujable en canvas (ImageBitmap o <img>).
+async function fileToDrawable(file) {
+    if ("createImageBitmap" in window) {
+        try {
+            return await createImageBitmap(file);
+        } catch {
+            /* algunos formatos/Safari fallan: caemos a <img> */
+        }
+    }
+    return await new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+            resolve(img);
+        };
+        img.onerror = (e) => {
+            URL.revokeObjectURL(url);
+            reject(e);
+        };
+        img.src = url;
+    });
+}
+
+// Decodifica el QR de una imagen y devuelve el número de parada o null.
+async function decodeStopFromFile(file) {
+    const src = await fileToDrawable(file);
+    const w = src.width || src.naturalWidth;
+    const h = src.height || src.naturalHeight;
+    if (!w || !h) return null;
+
+    // 1) BarcodeDetector nativo (Android/Chrome): admite directamente la imagen
+    if ("BarcodeDetector" in window) {
+        try {
+            const det = new window.BarcodeDetector({ formats: ["qr_code"] });
+            const codes = await det.detect(src);
+            if (codes && codes.length) {
+                return parseStopIdFromQr(codes[0].rawValue);
+            }
+        } catch {
+            /* seguimos con jsQR */
+        }
+    }
+
+    // 2) jsQR sobre los píxeles del canvas
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(src, 0, 0, w, h);
+    const imageData = ctx.getImageData(0, 0, w, h);
+
+    const jsQR = await loadJsQR();
+    const code = jsQR(imageData.data, w, h);
+    return code && code.data ? parseStopIdFromQr(code.data) : null;
+}
+
+// Abre la cámara en modo foto y resuelve con el número de parada, o null.
 export function openQrScanner() {
     return new Promise((resolve) => {
-        let stream = null;
-        let rafId = null;
         let settled = false;
-        let detector = null;
-        let canvas = null;
-        let ctx = null;
-
-        const overlay = document.createElement("div");
-        overlay.className = "scanner-overlay";
-        overlay.innerHTML = `
-            <div class="scanner-modal" role="dialog" aria-modal="true" aria-label="Escanear QR de la parada">
-                <div class="scanner-header">
-                    <div class="scanner-title">Escanea el QR de la parada</div>
-                    <button type="button" class="scanner-close" aria-label="Cerrar">✕</button>
-                </div>
-                <div class="scanner-video-wrap">
-                    <video class="scanner-video" playsinline webkit-playsinline muted autoplay></video>
-                    <div class="scanner-frame"></div>
-                </div>
-                <div class="scanner-status">Apunta la cámara al código QR de la marquesina.</div>
-            </div>
-        `;
-
-        const video = overlay.querySelector(".scanner-video");
-        const statusEl = overlay.querySelector(".scanner-status");
-        const closeBtn = overlay.querySelector(".scanner-close");
-
-        const cleanup = () => {
-            if (rafId) cancelAnimationFrame(rafId);
-            rafId = null;
-            if (stream) {
-                stream.getTracks().forEach(t => t.stop());
-                stream = null;
-            }
-            document.removeEventListener("keydown", onKey);
-            overlay.classList.remove("scanner-visible");
-            setTimeout(() => overlay.remove(), 150);
-        };
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "image/*";
+        input.capture = "environment"; // cámara trasera directa
+        input.style.display = "none";
+        document.body.appendChild(input);
 
         const finish = (result) => {
             if (settled) return;
             settled = true;
-            cleanup();
+            window.removeEventListener("focus", onFocusBack);
+            input.remove();
             resolve(result);
         };
 
-        const onKey = (e) => {
-            if (e.key === "Escape") finish(null);
+        // Los <input file> no avisan al cancelar. Si vuelve el foco a la página
+        // y no hay archivo, asumimos cancelación.
+        const onFocusBack = () => {
+            setTimeout(() => {
+                if (!input.files || !input.files.length) finish(null);
+            }, 600);
         };
 
-        closeBtn.addEventListener("click", () => finish(null));
-        overlay.addEventListener("click", (e) => {
-            if (e.target === overlay) finish(null);
-        });
-        document.addEventListener("keydown", onKey);
-
-        const handleText = (text) => {
-            const stopId = parseStopIdFromQr(text);
-            if (stopId != null) {
+        input.addEventListener("change", async () => {
+            const file = input.files && input.files[0];
+            if (!file) return finish(null);
+            try {
+                const stopId = await decodeStopFromFile(file);
+                if (stopId == null) {
+                    toast(
+                        "No se ha podido leer el QR. Acércate y enfoca bien el código.",
+                        { type: "error", duration: 5000 }
+                    );
+                }
                 finish(stopId);
-            } else {
-                statusEl.textContent = "QR leído pero sin número de parada reconocible.";
-            }
-        };
-
-        // Bucle de detección con BarcodeDetector nativo
-        const scanWithDetector = async () => {
-            if (settled) return;
-            try {
-                const codes = await detector.detect(video);
-                if (codes && codes.length) {
-                    handleText(codes[0].rawValue);
-                    if (settled) return;
-                }
-            } catch {
-                /* algunos frames fallan, seguimos */
-            }
-            rafId = requestAnimationFrame(scanWithDetector);
-        };
-
-        // Bucle de detección con jsQR (canvas)
-        const scanWithJsQr = (jsQR) => {
-            if (settled) return;
-            const w = video.videoWidth;
-            const h = video.videoHeight;
-            if (w && h) {
-                if (!canvas) {
-                    canvas = document.createElement("canvas");
-                    ctx = canvas.getContext("2d", { willReadFrequently: true });
-                }
-                canvas.width = w;
-                canvas.height = h;
-                ctx.drawImage(video, 0, 0, w, h);
-                const imageData = ctx.getImageData(0, 0, w, h);
-                const code = jsQR(imageData.data, w, h);
-                if (code && code.data) {
-                    handleText(code.data);
-                    if (settled) return;
-                }
-            }
-            rafId = requestAnimationFrame(() => scanWithJsQr(jsQR));
-        };
-
-        const startDecoding = async () => {
-            if ("BarcodeDetector" in window) {
-                try {
-                    detector = new window.BarcodeDetector({ formats: ["qr_code"] });
-                    scanWithDetector();
-                    return;
-                } catch {
-                    /* construirá falla → caemos a jsQR */
-                }
-            }
-            try {
-                statusEl.textContent = "Preparando el lector…";
-                const jsQR = await loadJsQR();
-                statusEl.textContent = "Apunta la cámara al código QR de la marquesina.";
-                scanWithJsQr(jsQR);
             } catch (err) {
-                statusEl.textContent = err.message || "No se pudo iniciar el lector de QR.";
+                console.warn("Error decodificando QR", err);
+                toast("No se pudo procesar la foto del QR.", { type: "error" });
+                finish(null);
             }
-        };
+        });
 
-        const start = async () => {
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                statusEl.textContent = "Este dispositivo no permite usar la cámara.";
-                return;
-            }
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { ideal: "environment" } },
-                    audio: false
-                });
-
-                // Safari/iOS: estos flags deben ir como PROPIEDADES (no solo
-                // atributos HTML) o el vídeo se queda en negro aunque la cámara
-                // esté activa. Y hay que esperar a los metadatos antes de play().
-                video.setAttribute("playsinline", "");
-                video.setAttribute("webkit-playsinline", "");
-                video.setAttribute("autoplay", "");
-                video.muted = true;
-                video.playsInline = true;
-                video.srcObject = stream;
-
-                await new Promise((res) => {
-                    if (video.readyState >= 1) return res();
-                    video.onloadedmetadata = () => res();
-                });
-
-                try {
-                    await video.play();
-                } catch (e) {
-                    // Algunos navegadores resuelven el play más tarde; seguimos.
-                    console.warn("video.play() no resolvió de inmediato", e);
-                }
-
-                startDecoding();
-            } catch (err) {
-                console.warn("Cámara no disponible", err);
-                statusEl.textContent =
-                    err && err.name === "NotAllowedError"
-                        ? "Permiso de cámara denegado. Actívalo para escanear."
-                        : "No se pudo acceder a la cámara.";
-            }
-        };
-
-        document.body.appendChild(overlay);
-        requestAnimationFrame(() => overlay.classList.add("scanner-visible"));
-        start();
+        window.addEventListener("focus", onFocusBack);
+        input.click();
     });
 }
