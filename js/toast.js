@@ -14,11 +14,17 @@ function ensureContainer() {
 }
 
 export function toast(message, options = {}) {
-    const { type = "info", duration = 3500 } = options;
+    const {
+        type = "info",
+        duration = 3500,
+        sticky = false,   // si true, no se cierra solo (hay que tocarlo)
+        onClick = null    // callback al tocar el toast (además de cerrarlo)
+    } = options;
     const c = ensureContainer();
 
     const el = document.createElement("div");
     el.className = `toast toast-${type}`;
+    if (onClick) el.classList.add("toast-action");
     el.setAttribute("role", type === "error" ? "alert" : "status");
     el.textContent = message;
     c.appendChild(el);
@@ -26,16 +32,25 @@ export function toast(message, options = {}) {
     // Activar transición en el siguiente frame
     requestAnimationFrame(() => el.classList.add("toast-visible"));
 
-    const timer = setTimeout(() => {
-        el.classList.remove("toast-visible");
-        setTimeout(() => el.remove(), 250);
-    }, duration);
-
-    el.addEventListener("click", () => {
-        clearTimeout(timer);
+    let timer = null;
+    const dismiss = () => {
+        if (timer) clearTimeout(timer);
         el.classList.remove("toast-visible");
         setTimeout(() => el.remove(), 200);
+    };
+
+    if (!sticky) {
+        timer = setTimeout(dismiss, duration);
+    }
+
+    el.addEventListener("click", () => {
+        if (onClick) {
+            try { onClick(); } catch (e) { console.warn("toast onClick error", e); }
+        }
+        dismiss();
     });
+
+    return dismiss;
 }
 
 export function confirmDialog(message, options = {}) {

@@ -3,7 +3,7 @@
 // - NO cachea llamadas a la API EMT: deben ir siempre a red para no
 //   mostrar tiempos de bus rancios.
 
-const CACHE_VERSION = "turrobuses-shell-v10";
+const CACHE_VERSION = "turrobuses-shell-v11";
 const SHELL_ASSETS = [
     "./",
     "./index.html",
@@ -24,10 +24,19 @@ const SHELL_ASSETS = [
 ];
 
 self.addEventListener("install", (event) => {
+    // No llamamos a skipWaiting() aquí: el nuevo SW queda "esperando" y la
+    // página avisa al usuario para que decida cuándo actualizar (ver el
+    // listener de mensajes SKIP_WAITING más abajo).
     event.waitUntil(
         caches.open(CACHE_VERSION).then((cache) => cache.addAll(SHELL_ASSETS))
     );
-    self.skipWaiting();
+});
+
+// La página manda este mensaje cuando el usuario toca "Actualizar".
+self.addEventListener("message", (event) => {
+    if (event.data && event.data.type === "SKIP_WAITING") {
+        self.skipWaiting();
+    }
 });
 
 self.addEventListener("activate", (event) => {

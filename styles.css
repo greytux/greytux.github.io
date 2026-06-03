@@ -1118,6 +1118,16 @@ h1 {
 .toast.toast-success { background: #15803d; }
 .toast.toast-warn    { background: #b45309; }
 
+.toast.toast-action {
+    cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.5);
+    font-weight: 600;
+}
+
+.toast.toast-action::after {
+    content: " ⟳";
+}
+
 /* ---- Coord picker (modal con mini-mapa Leaflet) ---- */
 .coord-picker-overlay {
     position: fixed;
