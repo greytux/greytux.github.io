@@ -72,7 +72,7 @@ export function openQrScanner() {
                     <button type="button" class="scanner-close" aria-label="Cerrar">✕</button>
                 </div>
                 <div class="scanner-video-wrap">
-                    <video class="scanner-video" playsinline muted></video>
+                    <video class="scanner-video" playsinline webkit-playsinline muted autoplay></video>
                     <div class="scanner-frame"></div>
                 </div>
                 <div class="scanner-status">Apunta la cámara al código QR de la marquesina.</div>
@@ -189,8 +189,29 @@ export function openQrScanner() {
                     video: { facingMode: { ideal: "environment" } },
                     audio: false
                 });
+
+                // Safari/iOS: estos flags deben ir como PROPIEDADES (no solo
+                // atributos HTML) o el vídeo se queda en negro aunque la cámara
+                // esté activa. Y hay que esperar a los metadatos antes de play().
+                video.setAttribute("playsinline", "");
+                video.setAttribute("webkit-playsinline", "");
+                video.setAttribute("autoplay", "");
+                video.muted = true;
+                video.playsInline = true;
                 video.srcObject = stream;
-                await video.play();
+
+                await new Promise((res) => {
+                    if (video.readyState >= 1) return res();
+                    video.onloadedmetadata = () => res();
+                });
+
+                try {
+                    await video.play();
+                } catch (e) {
+                    // Algunos navegadores resuelven el play más tarde; seguimos.
+                    console.warn("video.play() no resolvió de inmediato", e);
+                }
+
                 startDecoding();
             } catch (err) {
                 console.warn("Cámara no disponible", err);
