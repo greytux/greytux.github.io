@@ -96,6 +96,14 @@ export function renderAlarmsForStop(stopId) {
     if (!container) return;
 
     const expanded = container.dataset.expanded === "true";
+
+    // No reconstruir mientras el usuario está escribiendo en el formulario:
+    // renderStop llama aquí en cada refresco (45 s) y rehacer el innerHTML
+    // borraría lo tecleado y robaría el foco.
+    if (expanded && container.contains(document.activeElement)) {
+        return;
+    }
+
     const alarms = getAlarmsForStop(stopId);
 
     container.innerHTML = "";

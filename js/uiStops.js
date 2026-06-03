@@ -24,18 +24,18 @@ import {
     getStopLinesFromRawStop
 } from "./apiEmt.js";
 
-// Normaliza el número de línea (quita ceros a la izquierda) para comparar.
-function normLine(l) {
-    if (l == null) return "";
-    return String(l).trim().replace(/^0+/, "");
-}
-
 import { toast, confirmDialog } from "./toast.js";
 
 import {
     evaluateAlarmsForStop,
     renderAlarmsForStop
 } from "./alarms.js";
+
+// Normaliza el número de línea (quita ceros a la izquierda) para comparar.
+function normLine(l) {
+    if (l == null) return "";
+    return String(l).trim().replace(/^0+/, "");
+}
 
 // --- Enlace "Ver ubicación" + "Ver ruta andando" ---
 function updateLocationLink(stopId) {
