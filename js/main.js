@@ -21,7 +21,8 @@ import {
     renderNearbyStops,
     renderFavorites,
     handleAddFavorite,
-    applyFavoritesFilter
+    applyFavoritesFilter,
+    focusStopAccordion
 } from "./uiStops.js";
 
 import { initSlider } from "./slider.js";
@@ -228,10 +229,9 @@ if (scanQrBtn) {
         const ok = await handleAddFavorite(stopId, null);
         if (ok) {
             toast(`Parada ${stopId} añadida a favoritas.`, { type: "success" });
-            // Asegurar que estamos en la pestaña Favoritas para verla
-            const favTab = document.querySelector('.tab-btn[data-index="0"]');
-            if (favTab) favTab.click();
+            focusStopAccordion(stopId); // cambia a Favoritas, abre y hace scroll
         }
+        // Si ya existía, handleAddFavorite ya te lleva a ella.
     });
 }
 

@@ -348,7 +348,7 @@ function buildStopAccordionElement(stopConfig, opts = {}) {
         <div class="walk-time" id="walk-${id}"></div>
         <div class="reach-time" id="reach-${id}"></div>
         <div id="location-${id}" class="location-link-container"></div>
-        <div class="status" id="status-${id}">
+        <div class="status" id="status-${id}" aria-live="polite">
           <span class="status-dot"></span>
           <span>Cargando…</span>
         </div>
@@ -516,10 +516,34 @@ async function refreshFavorites() {
     await Promise.all(FAVORITES.map(fav => refreshStop(fav)));
 }
 
+// Lleva al usuario a una parada concreta: cambia a su pestaña, abre su
+// acordeón y hace scroll hasta él.
+export function focusStopAccordion(stopId) {
+    const article = document.querySelector(
+        `.accordion-item[data-stop-id="${stopId}"]`
+    );
+    if (!article) return false;
+
+    const slide = article.closest(".slide");
+    const idx = slide ? parseInt(slide.dataset.slide, 10) : 0;
+    const tab = document.querySelector(`.tab-btn[data-index="${idx}"]`);
+    if (tab) tab.click();
+
+    if (!article.classList.contains("open")) {
+        article.querySelector(".accordion-header")?.click();
+    }
+
+    requestAnimationFrame(() => {
+        article.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return true;
+}
+
 // --- Añadir favorita desde formulario ---
 export async function handleAddFavorite(stopId, filterLines) {
     if (FAVORITES.some(s => s.id === stopId)) {
-        toast(`La parada ${stopId} ya está en favoritas.`, { type: "warn" });
+        toast(`La parada ${stopId} ya está en favoritas. Te llevo a ella.`, { type: "info" });
+        focusStopAccordion(stopId);
         return false;
     }
 
