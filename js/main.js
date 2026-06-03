@@ -40,6 +40,8 @@ import {
     consumeUrlIntent
 } from "./shortcuts.js";
 
+import { openQrScanner } from "./scanner.js";
+
 // Util para normalizar número de línea (quita ceros a la izquierda)
 function normalizeLine(l) {
     if (l == null) return "";
@@ -60,6 +62,7 @@ const nearbyClearBtn  = document.getElementById("nearby-clear");
 const nearbyMsgEl     = document.getElementById("nearby-filter-message");
 
 const favLineInput    = document.getElementById("fav-line-input");
+const scanQrBtn       = document.getElementById("scan-qr-btn");
 
 // --- Refresh paradas cercanas (wrapper con texto + cache) ---
 async function refreshNearbyStopsWrapper() {
@@ -212,6 +215,22 @@ if (addFavoriteForm && favIdInput) {
         if (ok) {
             favIdInput.value = "";
             if (favLinesInput) favLinesInput.value = "";
+        }
+    });
+}
+
+// Botón "Escanear QR de la parada"
+if (scanQrBtn) {
+    scanQrBtn.addEventListener("click", async () => {
+        const stopId = await openQrScanner();
+        if (stopId == null) return;
+
+        const ok = await handleAddFavorite(stopId, null);
+        if (ok) {
+            toast(`Parada ${stopId} añadida a favoritas.`, { type: "success" });
+            // Asegurar que estamos en la pestaña Favoritas para verla
+            const favTab = document.querySelector('.tab-btn[data-index="0"]');
+            if (favTab) favTab.click();
         }
     });
 }
