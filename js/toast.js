@@ -53,6 +53,47 @@ export function toast(message, options = {}) {
     return dismiss;
 }
 
+// Diálogo informativo de solo lectura (un botón "Cerrar"). `content` puede ser
+// un string (texto) o un nodo DOM ya construido.
+export function infoDialog(title, content) {
+    return new Promise(resolve => {
+        const overlay = document.createElement("div");
+        overlay.className = "confirm-overlay";
+        overlay.innerHTML = `
+            <div class="confirm-dialog info-dialog" role="dialog" aria-modal="true">
+                <div class="info-dialog-title"></div>
+                <div class="info-dialog-body"></div>
+                <div class="confirm-actions">
+                    <button type="button" class="confirm-btn confirm-ok">Cerrar</button>
+                </div>
+            </div>
+        `;
+        overlay.querySelector(".info-dialog-title").textContent = title;
+        const body = overlay.querySelector(".info-dialog-body");
+        if (typeof content === "string") body.textContent = content;
+        else if (content) body.appendChild(content);
+
+        const close = () => {
+            document.removeEventListener("keydown", onKey);
+            overlay.classList.remove("confirm-visible");
+            setTimeout(() => overlay.remove(), 180);
+            resolve();
+        };
+        const onKey = (e) => {
+            if (e.key === "Escape" || e.key === "Enter") close();
+        };
+
+        overlay.querySelector(".confirm-ok").addEventListener("click", close);
+        overlay.addEventListener("click", (e) => {
+            if (e.target === overlay) close();
+        });
+        document.addEventListener("keydown", onKey);
+
+        document.body.appendChild(overlay);
+        requestAnimationFrame(() => overlay.classList.add("confirm-visible"));
+    });
+}
+
 export function confirmDialog(message, options = {}) {
     const {
         okText = "Aceptar",

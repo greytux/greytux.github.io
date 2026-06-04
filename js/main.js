@@ -31,6 +31,8 @@ import { toast } from "./toast.js";
 
 import { hasAnyAlarms, getAlarmedStopIds } from "./alarms.js";
 
+import { refreshIncidents } from "./incidents.js";
+
 import {
     ensureMapInitialized,
     refreshMapMarkers
@@ -132,6 +134,9 @@ async function refreshAll() {
             STOPS.map(s => fetchStopCoords(s.id).catch(() => null))
         );
     }
+
+    // 2.5) Incidencias de línea (throttled internamente a ~10 min)
+    await refreshIncidents();
 
     // 3) Refrescar favoritas. Normalmente solo las que tienen el acordeón
     //    abierto (las cerradas se refrescan al abrirlas). Pero si hay un filtro

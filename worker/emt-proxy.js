@@ -79,7 +79,7 @@ async function emtFetch(env, url, init = {}, _retry = 0) {
 // Tiempo de cache por tipo de endpoint (segundos). Las llegadas se cachean
 // pocos segundos (son "tiempo real" pero el cliente refresca cada 45s); el
 // detalle de parada es casi estático; las cercanas, un valor intermedio.
-const TTL = { arrives: 15, detail: 21600, nearby: 30 };
+const TTL = { arrives: 15, detail: 21600, nearby: 30, incidents: 600 };
 
 // Devuelve la respuesta cacheada si existe; si no, la produce, la cachea (solo
 // si EMT respondió code "00") y la devuelve. Cacheamos solo los DATOS (sin
@@ -152,6 +152,17 @@ export default {
                     emtFetch(
                         env,
                         `${base}/transport/busemtmad/stops/${stopId}/detail/`,
+                        { method: "GET" }
+                    )
+                );
+            }
+
+            // /api/incidents  → incidencias/avisos de todas las líneas
+            if (parts[1] === "incidents") {
+                return cachedJson(request, ctx, "incidents", origin, () =>
+                    emtFetch(
+                        env,
+                        `${V1}/transport/busemtmad/lines/incidents/all/`,
                         { method: "GET" }
                     )
                 );

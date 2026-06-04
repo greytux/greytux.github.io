@@ -330,6 +330,24 @@ export async function getNearbyStops() {
     return stopsArr;
 }
 
+// --- INCIDENCIAS DE LÍNEA ---
+// Devuelve el array de items de incidencia (todas las líneas). Tolerante a
+// fallos: si el proxy aún no tiene el endpoint o algo va mal, devuelve [].
+export async function getIncidents() {
+    try {
+        if (isApiInCooldown()) return [];
+        const res = await fetch(`${PROXY_BASE}/api/incidents`);
+        if (!res.ok) return [];
+        const json = await res.json();
+        if (json.code !== "00") return [];
+        const d0 = json.data && json.data[0];
+        return (d0 && Array.isArray(d0.item)) ? d0.item : [];
+    } catch (e) {
+        console.warn("No se pudieron cargar incidencias", e);
+        return [];
+    }
+}
+
 // --- GEOLOCALIZACIÓN sencilla: devolver coords sin tocar DOM ---
 export async function updateUserLocation() {
     if (!("geolocation" in navigator)) {

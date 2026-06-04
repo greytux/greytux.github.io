@@ -18,6 +18,8 @@ import { estimateWalk, computeVerdict } from "./walkTime.js";
 
 import { getDelayInfo } from "./etaTracker.js";
 
+import { getIncidentsForLine, showIncidentsForLine } from "./incidents.js";
+
 import {
     getArrivals,
     fetchStopCoords,
@@ -248,6 +250,21 @@ export function renderStop(stopConfig, arrivals) {
           Bus a ${distancePart}${delayPart ? " · " + delayPart : ""}
         </div>
       `;
+
+            // Aviso de incidencia en la línea (si la hay)
+            if (getIncidentsForLine(arr.line).length) {
+                const warn = document.createElement("button");
+                warn.type = "button";
+                warn.className = "incident-badge";
+                warn.title = "Ver incidencias de la línea";
+                warn.setAttribute("aria-label", `Incidencias de la línea ${arr.line}`);
+                warn.textContent = "⚠️";
+                warn.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    showIncidentsForLine(arr.line);
+                });
+                textBlock.querySelector(".bus-main")?.appendChild(warn);
+            }
 
             left.appendChild(lineBadge);
             left.appendChild(textBlock);
